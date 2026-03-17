@@ -625,4 +625,231 @@ describe("govern()", () => {
 			await governed.destroy();
 		});
 	});
+
+	// ─── Proxy fallback property access (Reflect.get branches) ───
+
+	describe("proxy fallback property access", () => {
+		it("Anthropic: accessing non-create prop on messages object returns original", async () => {
+			const mockClient = {
+				messages: {
+					create: vi.fn(async () => ({ id: "msg_123" })),
+					stream: vi.fn(async () => ({ id: "stream_123" })),
+					otherProp: 42,
+				},
+			};
+
+			const governed = await govern(mockClient, {
+				dryRun: true,
+				budget: 50_000,
+				vaultBase: tmpVault,
+			});
+
+			// Access non-intercepted prop on the messages proxy
+			const msgs = (governed as typeof mockClient).messages;
+			expect(msgs.otherProp).toBe(42);
+			expect(msgs.stream).toBeDefined();
+
+			await governed.destroy();
+		});
+
+		it("OpenAI: accessing non-create prop on completions returns original", async () => {
+			const mockClient = {
+				chat: {
+					completions: {
+						create: vi.fn(async () => ({ id: "chatcmpl-123" })),
+						list: vi.fn(async () => []),
+						extraProp: "hello",
+					},
+					otherChatProp: "world",
+				},
+			};
+
+			const governed = await govern(mockClient, {
+				dryRun: true,
+				budget: 50_000,
+				vaultBase: tmpVault,
+			});
+
+			// Access non-intercepted prop on completions proxy (line 459)
+			const completions = (governed as typeof mockClient).chat.completions;
+			expect(completions.extraProp).toBe("hello");
+			expect(completions.list).toBeDefined();
+
+			// Access non-intercepted prop on chat proxy (line 466)
+			const chat = (governed as typeof mockClient).chat;
+			expect(chat.otherChatProp).toBe("world");
+
+			await governed.destroy();
+		});
+
+		it("Google: accessing non-generateContent prop on models returns original", async () => {
+			const mockClient = {
+				models: {
+					generateContent: vi.fn(async () => ({ text: "Hello" })),
+					list: vi.fn(async () => []),
+					someProp: 99,
+				},
+			};
+
+			const governed = await govern(mockClient, {
+				dryRun: true,
+				budget: 50_000,
+				vaultBase: tmpVault,
+			});
+
+			// Access non-intercepted prop on models proxy (line 495)
+			const models = (governed as typeof mockClient).models;
+			expect(models.someProp).toBe(99);
+			expect(models.list).toBeDefined();
+
+			await governed.destroy();
+		});
+	});
+
+	// ─── Audit degraded in LLM failure path ───
+
+	describe("audit degraded in LLM failure path", () => {
+		it("sets auditDegraded when llm_call_failed audit write throws (line 349)", async () => {
+			const mockAudit: import("../../src/audit/chain.js").AuditWriter = {
+				appendEvent: vi.fn(async () => {
+					throw new Error("Audit disk full in error path");
+				}),
+				getWriteFailures: vi.fn(() => 0),
+				isDegraded: vi.fn(() => false),
+				flush: vi.fn(async () => {}),
+				release: vi.fn(),
+			};
+
+			const mockClient = makeAnthropicMock(undefined, async () => {
+				throw new Error("LLM 500 error");
+			});
+
+			const governed = await govern(mockClient, {
+				dryRun: true,
+				budget: 50_000,
+				vaultBase: tmpVault,
+				_audit: mockAudit,
+			});
+
+			// LLM error should propagate even if audit fails
+			await expect(
+				governed.messages.create({
+					model: "claude-sonnet-4-6",
+					messages: [{ role: "user", content: "Hello" }],
+				}),
+			).rejects.toThrow("LLM 500 error");
+
+			// Audit was called with llm_call_failed but it threw
+			expect(mockAudit.appendEvent).toHaveBeenCalledWith(
+				expect.objectContaining({ kind: "llm_call_failed" }),
+			);
+
+			await governed.destroy();
+		});
+	});
+
+	// ─── Proxy void on LLM failure (line 335) ───
+
+	describe("proxy void on LLM failure", () => {
+		it("calls proxyConn.void when LLM fails in proxy mode (line 335)", async () => {
+			const mockClient = makeAnthropicMock(undefined, async () => {
+				throw new Error("LLM rate limited");
+			});
+
+			const governed = await govern(mockClient, {
+				dryRun: false,
+				budget: 50_000,
+				vaultBase: tmpVault,
+				proxy: "https://proxy.usertools.ai",
+			});
+
+			await expect(
+				governed.messages.create({
+					model: "claude-sonnet-4-6",
+					messages: [{ role: "user", content: "Hello" }],
+				}),
+			).rejects.toThrow("LLM rate limited");
+
+			await governed.destroy();
+		});
+	});
+
+	// ─── Proxy settlement path (lines 263-269) ───
+
+	describe("proxy settlement in non-dryRun mode", () => {
+		it("exercises proxy settle path when dryRun=false with proxy", async () => {
+			const mockClient = makeAnthropicMock();
+
+			const governed = await govern(mockClient, {
+				dryRun: false,
+				budget: 50_000,
+				vaultBase: tmpVault,
+				proxy: "https://proxy.usertools.ai",
+			});
+
+			const result = await governed.messages.create({
+				model: "claude-sonnet-4-6",
+				max_tokens: 1024,
+				messages: [{ role: "user", content: "Hello" }],
+			});
+
+			// With the stub proxy, settle succeeds, so settled should be true
+			expect(result.governance.settled).toBe(true);
+
+			await governed.destroy();
+		});
+	});
+
+	// ─── Response without usage field ───
+
+	describe("response without usage", () => {
+		it("uses estimated cost when response has no usage field", async () => {
+			const mockClient = makeAnthropicMock({
+				id: "msg_no_usage",
+				model: "claude-sonnet-4-6",
+				// no usage field
+			});
+
+			const governed = await govern(mockClient, {
+				dryRun: true,
+				budget: 50_000,
+				vaultBase: tmpVault,
+			});
+
+			const result = await governed.messages.create({
+				model: "claude-sonnet-4-6",
+				max_tokens: 1024,
+				messages: [{ role: "user", content: "Hello" }],
+			});
+
+			// Should still have a cost (estimated, not from usage)
+			expect(result.governance.cost).toBeGreaterThan(0);
+
+			await governed.destroy();
+		});
+
+		it("uses estimated cost when usage is null", async () => {
+			const mockClient = makeAnthropicMock({
+				id: "msg_null_usage",
+				model: "claude-sonnet-4-6",
+				usage: null,
+			});
+
+			const governed = await govern(mockClient, {
+				dryRun: true,
+				budget: 50_000,
+				vaultBase: tmpVault,
+			});
+
+			const result = await governed.messages.create({
+				model: "claude-sonnet-4-6",
+				max_tokens: 1024,
+				messages: [{ role: "user", content: "Hello" }],
+			});
+
+			expect(result.governance.cost).toBeGreaterThan(0);
+
+			await governed.destroy();
+		});
+	});
 });

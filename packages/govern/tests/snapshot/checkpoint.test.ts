@@ -233,4 +233,136 @@ describe("Checkpoint / Restore", () => {
 			expect(config).toBe('{"version": 2}');
 		});
 	});
+
+	// ── Edge cases for uncovered branches ──
+
+	describe("gatherVaultFiles edge cases", () => {
+		it("returns empty array when vault path does not exist (line 74)", async () => {
+			const nonExistentPath = join(tempDir, "non-existent-vault");
+			const meta = await createSnapshot(nonExistentPath, "empty-snap");
+
+			expect(meta.files).toEqual([]);
+			expect(meta.size).toBe(0);
+		});
+
+		it("skips entries not in INCLUDED_PATHS set (line 83)", async () => {
+			// Create files/dirs that are NOT in the include set
+			await mkdir(join(vaultPath, "custom-dir"), { recursive: true });
+			await writeFile(join(vaultPath, "custom-dir", "data.txt"), "hello");
+			await writeFile(join(vaultPath, "random-file.txt"), "world");
+
+			// Create one included file for reference
+			await writeFile(
+				join(vaultPath, "govern.config.json"),
+				'{"version": 1}',
+			);
+
+			const meta = await createSnapshot(vaultPath, "filter-snap");
+
+			// Only the included file should be present
+			expect(meta.files).toContain("govern.config.json");
+			expect(meta.files).not.toContain("custom-dir/data.txt");
+			expect(meta.files).not.toContain("random-file.txt");
+		});
+
+		it("handles vault with missing optional files (e.g. no leases.json)", async () => {
+			// Only create audit directory, no leases.json
+			await mkdir(join(vaultPath, "audit"), { recursive: true });
+			await writeFile(join(vaultPath, "audit", "chain.jsonl"), "data\n");
+
+			const meta = await createSnapshot(vaultPath, "partial-snap");
+
+			expect(meta.files).toContain("audit/chain.jsonl");
+			expect(meta.files).not.toContain("leases.json");
+		});
+	});
+
+	describe("collectFiles with nested directories (lines 54-55)", () => {
+		it("recursively collects files from nested subdirectories", async () => {
+			// Create a deeply nested structure under an included path
+			await mkdir(join(vaultPath, "audit", "nested", "deep"), {
+				recursive: true,
+			});
+			await writeFile(
+				join(vaultPath, "audit", "nested", "deep", "event.jsonl"),
+				"nested-data",
+			);
+			await writeFile(
+				join(vaultPath, "audit", "nested", "summary.json"),
+				"{}",
+			);
+			await writeFile(join(vaultPath, "audit", "top.jsonl"), "top-data");
+
+			const meta = await createSnapshot(vaultPath, "nested-snap");
+
+			expect(meta.files).toContain("audit/top.jsonl");
+			expect(meta.files).toContain("audit/nested/summary.json");
+			expect(meta.files).toContain("audit/nested/deep/event.jsonl");
+		});
+	});
+
+	describe("listSnapshots edge cases", () => {
+		it("skips non-JSON files in snapshots directory (line 185)", async () => {
+			await populateVault();
+
+			// Create a valid snapshot
+			await createSnapshot(vaultPath, "valid");
+
+			// Place a non-JSON file in the snapshots dir
+			const snapshotsDir = join(vaultPath, "snapshots");
+			await writeFile(join(snapshotsDir, "notes.txt"), "not a snapshot");
+
+			const snapshots = await listSnapshots(vaultPath);
+
+			// Only the valid .json snapshot should be listed
+			expect(snapshots).toHaveLength(1);
+			expect(snapshots[0]!.name).toBe("valid");
+		});
+
+		it("skips subdirectories in snapshots directory (line 185)", async () => {
+			await populateVault();
+
+			await createSnapshot(vaultPath, "real");
+
+			// Create a subdirectory inside snapshots/
+			const snapshotsDir = join(vaultPath, "snapshots");
+			await mkdir(join(snapshotsDir, "subdir"), { recursive: true });
+			// Also put a .json file inside the subdir (should not be found)
+			await writeFile(
+				join(snapshotsDir, "subdir", "nested.json"),
+				'{"meta": {}}',
+			);
+
+			const snapshots = await listSnapshots(vaultPath);
+
+			expect(snapshots).toHaveLength(1);
+			expect(snapshots[0]!.name).toBe("real");
+		});
+
+		it("skips corrupt snapshot files gracefully", async () => {
+			await populateVault();
+			await createSnapshot(vaultPath, "good");
+
+			// Write a corrupt JSON file to snapshots dir
+			const snapshotsDir = join(vaultPath, "snapshots");
+			await writeFile(
+				join(snapshotsDir, "corrupt.json"),
+				"{ not valid json !!!",
+			);
+
+			const snapshots = await listSnapshots(vaultPath);
+
+			// Only the good snapshot should be returned
+			expect(snapshots).toHaveLength(1);
+			expect(snapshots[0]!.name).toBe("good");
+		});
+	});
+
+	describe("restoreSnapshot edge cases", () => {
+		it("throws when snapshot does not exist", async () => {
+			await expect(
+				restoreSnapshot(vaultPath, "nonexistent"),
+			).rejects.toThrow();
+		});
+	});
 });
