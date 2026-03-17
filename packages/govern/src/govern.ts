@@ -300,7 +300,7 @@ export async function govern<T>(client: T, opts?: GovernOpts): Promise<GovernedC
 							model,
 							provider: kind,
 							timestamp: new Date().toISOString(),
-							auditDegraded: callAuditDegraded || undefined,
+							...(callAuditDegraded ? { auditDegraded: true as const } : {}),
 						};
 					},
 					(error: unknown) => {
@@ -329,7 +329,7 @@ export async function govern<T>(client: T, opts?: GovernOpts): Promise<GovernedC
 					model,
 					provider: kind,
 					timestamp: new Date().toISOString(),
-					auditDegraded: callAuditDegraded || undefined,
+					...(callAuditDegraded ? { auditDegraded: true as const } : {}),
 				};
 
 				return { response: governedStream, governance: estimatedGovernance };
@@ -454,7 +454,7 @@ export async function govern<T>(client: T, opts?: GovernOpts): Promise<GovernedC
 				model,
 				provider: kind,
 				timestamp: new Date().toISOString(),
-				auditDegraded: callAuditDegraded || undefined,
+				...(callAuditDegraded ? { auditDegraded: true as const } : {}),
 			};
 
 			return { response, governance };
