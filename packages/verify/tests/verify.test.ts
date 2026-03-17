@@ -1,9 +1,21 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { GENESIS_HASH, canonicalize, verifyChain, verifyVault } from "../src/index.js";
+import {
+	GENESIS_HASH,
+	buildMerkleTree,
+	canonicalize,
+	generateConsistencyProof,
+	generateInclusionProof,
+	hashInternal,
+	hashLeaf,
+	verifyChain,
+	verifyConsistencyProof,
+	verifyInclusionProof,
+	verifyVault,
+} from "../src/index.js";
 
 // ── Helpers ──
 
@@ -52,7 +64,33 @@ function writeChainToVault(vaultPath: string, lines: string[]): void {
 	writeFileSync(logPath, `${lines.join("\n")}\n`);
 }
 
+/** Generate N distinct hex hashes for Merkle tree tests */
+function makeLeaves(n: number): string[] {
+	const leaves: string[] = [];
+	for (let i = 0; i < n; i++) {
+		leaves.push(createHash("sha256").update(`leaf-${i}`).digest("hex"));
+	}
+	return leaves;
+}
+
+/** Safe array access — throws if index is out of bounds (avoids ! assertions) */
+function at<T>(arr: readonly T[], index: number): T {
+	const val = arr[index];
+	if (val === undefined) throw new Error(`Index ${index} out of bounds (length ${arr.length})`);
+	return val;
+}
+
+/** Safe root access — throws if tree root is undefined */
+function rootOf(tree: { root: string | undefined }): string {
+	if (tree.root === undefined) throw new Error("Tree root is undefined");
+	return tree.root;
+}
+
 // ── Tests ──
+
+// ═══════════════════════════════════════════════════════════════
+// verifyChain
+// ═══════════════════════════════════════════════════════════════
 
 describe("verifyChain", () => {
 	let vaultPath: string;
@@ -69,6 +107,24 @@ describe("verifyChain", () => {
 
 	it("returns valid for an empty chain (no file)", () => {
 		const logPath = join(vaultPath, "audit", "events.jsonl");
+		const result = verifyChain(logPath);
+		expect(result.valid).toBe(true);
+		expect(result.eventsVerified).toBe(0);
+		expect(result.latestHash).toBe(GENESIS_HASH);
+	});
+
+	it("returns valid for a file that exists but is empty", () => {
+		const logPath = join(vaultPath, "audit", "events.jsonl");
+		writeFileSync(logPath, "");
+		const result = verifyChain(logPath);
+		expect(result.valid).toBe(true);
+		expect(result.eventsVerified).toBe(0);
+		expect(result.latestHash).toBe(GENESIS_HASH);
+	});
+
+	it("returns valid for a file with only whitespace", () => {
+		const logPath = join(vaultPath, "audit", "events.jsonl");
+		writeFileSync(logPath, "   \n  \n  ");
 		const result = verifyChain(logPath);
 		expect(result.valid).toBe(true);
 		expect(result.eventsVerified).toBe(0);
@@ -95,11 +151,9 @@ describe("verifyChain", () => {
 			{ kind: "llm_call", actor: "local", data: { model: "claude-sonnet-4-6" } },
 			{ kind: "llm_call", actor: "local", data: { cost: 100 } },
 		]);
-		// Tamper with the second event's data
-		const secondLine = lines[1];
-		if (!secondLine) throw new Error("Expected second line");
+		const secondLine = at(lines, 1);
 		const tampered = JSON.parse(secondLine) as Record<string, unknown>;
-		tampered.data = { cost: 999 }; // change data without updating hash
+		tampered.data = { cost: 999 };
 		lines[1] = JSON.stringify(tampered);
 
 		const logPath = join(vaultPath, "audit", "events.jsonl");
@@ -116,12 +170,9 @@ describe("verifyChain", () => {
 			{ kind: "llm_call", actor: "local", data: { model: "claude-sonnet-4-6" } },
 			{ kind: "llm_call", actor: "local", data: { model: "gpt-4o" } },
 		]);
-		// Break the chain by changing the second event's previousHash
-		const secondLine = lines[1];
-		if (!secondLine) throw new Error("Expected second line");
+		const secondLine = at(lines, 1);
 		const parsed = JSON.parse(secondLine) as Record<string, unknown>;
 		parsed.previousHash = "deadbeef".repeat(8);
-		// Recompute hash for the tampered event so hash itself is valid
 		const { hash: _, ...withoutHash } = parsed;
 		const canonical = canonicalize(withoutHash);
 		parsed.hash = createHash("sha256").update(canonical).digest("hex");
@@ -134,7 +185,705 @@ describe("verifyChain", () => {
 		expect(result.valid).toBe(false);
 		expect(result.errors.some((e) => e.includes("previousHash mismatch"))).toBe(true);
 	});
+
+	it("reports malformed JSON lines as errors", () => {
+		const lines = buildChain([
+			{ kind: "llm_call", actor: "local", data: { model: "claude-sonnet-4-6" } },
+		]);
+		lines.push("NOT VALID JSON {{{");
+
+		const logPath = join(vaultPath, "audit", "events.jsonl");
+		writeFileSync(logPath, `${lines.join("\n")}\n`);
+
+		const result = verifyChain(logPath);
+		expect(result.valid).toBe(false);
+		expect(result.errors.some((e) => e.includes("malformed JSON"))).toBe(true);
+		expect(result.eventsVerified).toBe(2);
+	});
+
+	it("continues verification after malformed JSON line", () => {
+		const valid = buildChain([{ kind: "llm_call", actor: "local", data: { a: 1 } }]);
+		const logPath = join(vaultPath, "audit", "events.jsonl");
+		writeFileSync(logPath, `{broken json\n${valid[0]}\n`);
+
+		const result = verifyChain(logPath);
+		expect(result.valid).toBe(false);
+		expect(result.errors.length).toBeGreaterThanOrEqual(1);
+		expect(result.errors[0]).toContain("malformed JSON");
+	});
 });
+
+// ═══════════════════════════════════════════════════════════════
+// canonicalize
+// ═══════════════════════════════════════════════════════════════
+
+describe("canonicalize", () => {
+	it("sorts object keys alphabetically", () => {
+		expect(canonicalize({ z: 1, a: 2 })).toBe('{"a":2,"z":1}');
+	});
+
+	it("handles nested objects", () => {
+		expect(canonicalize({ b: { d: 1, c: 2 }, a: 3 })).toBe('{"a":3,"b":{"c":2,"d":1}}');
+	});
+
+	it("preserves null", () => {
+		expect(canonicalize(null)).toBe("null");
+	});
+
+	it("handles undefined", () => {
+		expect(canonicalize(undefined)).toBe(undefined);
+	});
+
+	it("strips undefined values from objects", () => {
+		const result = canonicalize({ a: 1, b: undefined, c: 3 });
+		expect(result).toBe('{"a":1,"c":3}');
+	});
+
+	it("handles arrays — preserves order", () => {
+		expect(canonicalize([3, 1, 2])).toBe("[3,1,2]");
+	});
+
+	it("handles empty array", () => {
+		expect(canonicalize([])).toBe("[]");
+	});
+
+	it("handles arrays with mixed types", () => {
+		expect(canonicalize([1, "two", null, { a: 1 }])).toBe('[1,"two",null,{"a":1}]');
+	});
+
+	it("handles nested arrays", () => {
+		expect(canonicalize([[1, 2], [3]])).toBe("[[1,2],[3]]");
+	});
+
+	it("handles string primitives", () => {
+		expect(canonicalize("hello")).toBe('"hello"');
+	});
+
+	it("handles number primitives", () => {
+		expect(canonicalize(42)).toBe("42");
+	});
+
+	it("handles boolean primitives", () => {
+		expect(canonicalize(true)).toBe("true");
+		expect(canonicalize(false)).toBe("false");
+	});
+
+	it("handles empty object", () => {
+		expect(canonicalize({})).toBe("{}");
+	});
+
+	it("handles deeply nested structures", () => {
+		const val = { a: [{ b: { c: [1, { d: 2 }] } }] };
+		const result = canonicalize(val);
+		expect(result).toBe('{"a":[{"b":{"c":[1,{"d":2}]}}]}');
+	});
+});
+
+// ═══════════════════════════════════════════════════════════════
+// hashLeaf / hashInternal
+// ═══════════════════════════════════════════════════════════════
+
+describe("hashLeaf", () => {
+	it("returns a deterministic 64-char hex string", () => {
+		const hash = hashLeaf("abcd".repeat(16));
+		expect(hash).toHaveLength(64);
+		expect(hash).toMatch(/^[0-9a-f]{64}$/);
+	});
+
+	it("returns the same hash for the same input", () => {
+		const input = createHash("sha256").update("test").digest("hex");
+		expect(hashLeaf(input)).toBe(hashLeaf(input));
+	});
+
+	it("returns different hashes for different inputs", () => {
+		const a = createHash("sha256").update("a").digest("hex");
+		const b = createHash("sha256").update("b").digest("hex");
+		expect(hashLeaf(a)).not.toBe(hashLeaf(b));
+	});
+
+	it("uses 0x00 prefix (domain separation from internal)", () => {
+		const data = createHash("sha256").update("x").digest("hex");
+		const expected = createHash("sha256")
+			.update(Buffer.from([0x00]))
+			.update(Buffer.from(data, "hex"))
+			.digest("hex");
+		expect(hashLeaf(data)).toBe(expected);
+	});
+});
+
+describe("hashInternal", () => {
+	it("returns a deterministic 64-char hex string", () => {
+		const left = createHash("sha256").update("left").digest("hex");
+		const right = createHash("sha256").update("right").digest("hex");
+		const hash = hashInternal(left, right);
+		expect(hash).toHaveLength(64);
+		expect(hash).toMatch(/^[0-9a-f]{64}$/);
+	});
+
+	it("is deterministic", () => {
+		const left = createHash("sha256").update("l").digest("hex");
+		const right = createHash("sha256").update("r").digest("hex");
+		expect(hashInternal(left, right)).toBe(hashInternal(left, right));
+	});
+
+	it("is NOT commutative — order matters", () => {
+		const a = createHash("sha256").update("a").digest("hex");
+		const b = createHash("sha256").update("b").digest("hex");
+		expect(hashInternal(a, b)).not.toBe(hashInternal(b, a));
+	});
+
+	it("uses 0x01 prefix (domain separation from leaf)", () => {
+		const left = createHash("sha256").update("left").digest("hex");
+		const right = createHash("sha256").update("right").digest("hex");
+		const expected = createHash("sha256")
+			.update(Buffer.from([0x01]))
+			.update(Buffer.from(left, "hex"))
+			.update(Buffer.from(right, "hex"))
+			.digest("hex");
+		expect(hashInternal(left, right)).toBe(expected);
+	});
+
+	it("leaf and internal hashes differ for same data", () => {
+		const data = createHash("sha256").update("same").digest("hex");
+		expect(hashLeaf(data)).not.toBe(hashInternal(data, data));
+	});
+});
+
+// ═══════════════════════════════════════════════════════════════
+// buildMerkleTree
+// ═══════════════════════════════════════════════════════════════
+
+describe("buildMerkleTree", () => {
+	it("returns undefined root for empty input", () => {
+		const { root, layers } = buildMerkleTree([]);
+		expect(root).toBeUndefined();
+		expect(layers).toEqual([[]]);
+	});
+
+	it("returns hashLeaf as root for single leaf", () => {
+		const leaves = makeLeaves(1);
+		const { root, layers } = buildMerkleTree(leaves);
+		expect(root).toBe(hashLeaf(at(leaves, 0)));
+		expect(layers).toHaveLength(1);
+		expect(layers[0]).toHaveLength(1);
+	});
+
+	it("builds correct tree for 2 leaves (even)", () => {
+		const leaves = makeLeaves(2);
+		const { root, layers } = buildMerkleTree(leaves);
+		const expectedRoot = hashInternal(hashLeaf(at(leaves, 0)), hashLeaf(at(leaves, 1)));
+		expect(root).toBe(expectedRoot);
+		expect(layers).toHaveLength(2);
+		expect(layers[0]).toHaveLength(2);
+		expect(layers[1]).toHaveLength(1);
+	});
+
+	it("builds correct tree for 3 leaves (odd — promotes unpaired)", () => {
+		const leaves = makeLeaves(3);
+		const { root, layers } = buildMerkleTree(leaves);
+		const h0 = hashLeaf(at(leaves, 0));
+		const h1 = hashLeaf(at(leaves, 1));
+		const h2 = hashLeaf(at(leaves, 2));
+		const int01 = hashInternal(h0, h1);
+		const expectedRoot = hashInternal(int01, h2);
+		expect(root).toBe(expectedRoot);
+		expect(layers).toHaveLength(3);
+	});
+
+	it("builds correct tree for 4 leaves (power of 2)", () => {
+		const leaves = makeLeaves(4);
+		const { root, layers } = buildMerkleTree(leaves);
+		const h0 = hashLeaf(at(leaves, 0));
+		const h1 = hashLeaf(at(leaves, 1));
+		const h2 = hashLeaf(at(leaves, 2));
+		const h3 = hashLeaf(at(leaves, 3));
+		const expectedRoot = hashInternal(hashInternal(h0, h1), hashInternal(h2, h3));
+		expect(root).toBe(expectedRoot);
+		expect(layers).toHaveLength(3);
+	});
+
+	it("builds correct tree for 5 leaves (odd count, two levels of promotion)", () => {
+		const leaves = makeLeaves(5);
+		const { root, layers } = buildMerkleTree(leaves);
+		expect(root).toBeDefined();
+		expect(layers.length).toBeGreaterThan(1);
+		expect(layers[0]).toHaveLength(5);
+		expect(layers[1]).toHaveLength(3);
+		expect(layers[2]).toHaveLength(2);
+		expect(layers[3]).toHaveLength(1);
+	});
+
+	it("builds tree for large input (16 leaves)", () => {
+		const leaves = makeLeaves(16);
+		const { root, layers } = buildMerkleTree(leaves);
+		expect(root).toBeDefined();
+		expect(layers).toHaveLength(5);
+	});
+
+	it("different leaves produce different roots", () => {
+		const a = makeLeaves(3);
+		const b = makeLeaves(3).map((_, i) =>
+			createHash("sha256").update(`different-${i}`).digest("hex"),
+		);
+		expect(buildMerkleTree(a).root).not.toBe(buildMerkleTree(b).root);
+	});
+});
+
+// ═══════════════════════════════════════════════════════════════
+// generateInclusionProof / verifyInclusionProof
+// ═══════════════════════════════════════════════════════════════
+
+describe("generateInclusionProof", () => {
+	it("throws RangeError for negative index", () => {
+		const leaves = makeLeaves(3);
+		expect(() => generateInclusionProof(-1, leaves, "seg-1")).toThrow(RangeError);
+	});
+
+	it("throws RangeError for index >= leaves.length", () => {
+		const leaves = makeLeaves(3);
+		expect(() => generateInclusionProof(3, leaves, "seg-1")).toThrow(RangeError);
+		expect(() => generateInclusionProof(100, leaves, "seg-1")).toThrow(RangeError);
+	});
+
+	it("throws RangeError for index 0 on empty leaves", () => {
+		expect(() => generateInclusionProof(0, [], "seg-1")).toThrow(RangeError);
+	});
+
+	it("generates valid proof for single-leaf tree", () => {
+		const leaves = makeLeaves(1);
+		const proof = generateInclusionProof(0, leaves, "seg-1");
+		expect(proof.version).toBe(1);
+		expect(proof.leafHash).toBe(at(leaves, 0));
+		expect(proof.leafIndex).toBe(0);
+		expect(proof.treeSize).toBe(1);
+		expect(proof.segmentId).toBe("seg-1");
+		expect(proof.siblings).toHaveLength(0);
+		expect(proof.root).toBeDefined();
+	});
+
+	it("generates valid proof for 2-leaf tree — both positions", () => {
+		const leaves = makeLeaves(2);
+		const tree = buildMerkleTree(leaves);
+
+		const proof0 = generateInclusionProof(0, leaves, "seg-a");
+		expect(proof0.leafIndex).toBe(0);
+		expect(proof0.root).toBe(tree.root);
+		expect(proof0.siblings).toHaveLength(1);
+		expect(at(proof0.siblings, 0).position).toBe("right");
+
+		const proof1 = generateInclusionProof(1, leaves, "seg-a");
+		expect(proof1.leafIndex).toBe(1);
+		expect(proof1.root).toBe(tree.root);
+		expect(proof1.siblings).toHaveLength(1);
+		expect(at(proof1.siblings, 0).position).toBe("left");
+	});
+
+	it("generates valid proof for 3-leaf tree — all positions", () => {
+		const leaves = makeLeaves(3);
+		const tree = buildMerkleTree(leaves);
+
+		for (let i = 0; i < 3; i++) {
+			const proof = generateInclusionProof(i, leaves, `seg-${i}`);
+			expect(proof.root).toBe(tree.root);
+			expect(proof.leafHash).toBe(at(leaves, i));
+		}
+	});
+
+	it("generates valid proof for 4-leaf tree — all positions", () => {
+		const leaves = makeLeaves(4);
+		const tree = buildMerkleTree(leaves);
+
+		for (let i = 0; i < 4; i++) {
+			const proof = generateInclusionProof(i, leaves, "seg-4");
+			expect(proof.root).toBe(tree.root);
+			expect(proof.treeSize).toBe(4);
+		}
+	});
+
+	it("generates valid proof for 5-leaf tree (odd) — all positions", () => {
+		const leaves = makeLeaves(5);
+		const tree = buildMerkleTree(leaves);
+
+		for (let i = 0; i < 5; i++) {
+			const proof = generateInclusionProof(i, leaves, "seg-5");
+			expect(proof.root).toBe(tree.root);
+		}
+	});
+
+	it("generates valid proof for 7-leaf tree (odd, multiple promotions)", () => {
+		const leaves = makeLeaves(7);
+		const tree = buildMerkleTree(leaves);
+
+		for (let i = 0; i < 7; i++) {
+			const proof = generateInclusionProof(i, leaves, "seg-7");
+			expect(proof.root).toBe(tree.root);
+		}
+	});
+
+	it("generates valid proof for 8-leaf tree (power of 2)", () => {
+		const leaves = makeLeaves(8);
+		const tree = buildMerkleTree(leaves);
+
+		for (let i = 0; i < 8; i++) {
+			const proof = generateInclusionProof(i, leaves, "seg-8");
+			expect(proof.root).toBe(tree.root);
+		}
+	});
+});
+
+describe("verifyInclusionProof", () => {
+	it("returns true for valid proof — 2 leaves", () => {
+		const leaves = makeLeaves(2);
+		const tree = buildMerkleTree(leaves);
+		const proof = generateInclusionProof(0, leaves, "seg-v");
+
+		expect(verifyInclusionProof(proof, rootOf(tree), leaves.length)).toBe(true);
+	});
+
+	it("returns true for valid proof — every position in 4-leaf tree", () => {
+		const leaves = makeLeaves(4);
+		const tree = buildMerkleTree(leaves);
+
+		for (let i = 0; i < 4; i++) {
+			const proof = generateInclusionProof(i, leaves, "seg-v4");
+			expect(verifyInclusionProof(proof, rootOf(tree), 4)).toBe(true);
+		}
+	});
+
+	it("returns true for valid proof — every position in 5-leaf tree (odd)", () => {
+		const leaves = makeLeaves(5);
+		const tree = buildMerkleTree(leaves);
+
+		for (let i = 0; i < 5; i++) {
+			const proof = generateInclusionProof(i, leaves, "seg-v5");
+			expect(verifyInclusionProof(proof, rootOf(tree), 5)).toBe(true);
+		}
+	});
+
+	it("returns true for valid proof — single-leaf tree", () => {
+		const leaves = makeLeaves(1);
+		const tree = buildMerkleTree(leaves);
+		const proof = generateInclusionProof(0, leaves, "seg-v1");
+		expect(verifyInclusionProof(proof, rootOf(tree), 1)).toBe(true);
+	});
+
+	it("returns false for wrong published root", () => {
+		const leaves = makeLeaves(4);
+		const proof = generateInclusionProof(0, leaves, "seg-bad");
+		expect(verifyInclusionProof(proof, "deadbeef".repeat(8), 4)).toBe(false);
+	});
+
+	it("returns false for wrong published tree size", () => {
+		const leaves = makeLeaves(4);
+		const tree = buildMerkleTree(leaves);
+		const proof = generateInclusionProof(0, leaves, "seg-bad");
+		expect(verifyInclusionProof(proof, rootOf(tree), 999)).toBe(false);
+	});
+
+	it("returns false for tampered sibling hash", () => {
+		const leaves = makeLeaves(4);
+		const tree = buildMerkleTree(leaves);
+		const proof = generateInclusionProof(0, leaves, "seg-tamper");
+
+		const tampered = {
+			...proof,
+			siblings: proof.siblings.map((s, idx) => (idx === 0 ? { ...s, hash: "ff".repeat(32) } : s)),
+		};
+		expect(verifyInclusionProof(tampered, rootOf(tree), 4)).toBe(false);
+	});
+
+	it("returns false when leafHash is tampered", () => {
+		const leaves = makeLeaves(4);
+		const tree = buildMerkleTree(leaves);
+		const proof = generateInclusionProof(0, leaves, "seg-tamper2");
+
+		const tampered = {
+			...proof,
+			leafHash: "aa".repeat(32),
+		};
+		expect(verifyInclusionProof(tampered, rootOf(tree), 4)).toBe(false);
+	});
+
+	it("verifies all positions in a 16-leaf tree", () => {
+		const leaves = makeLeaves(16);
+		const tree = buildMerkleTree(leaves);
+
+		for (let i = 0; i < 16; i++) {
+			const proof = generateInclusionProof(i, leaves, "seg-16");
+			expect(verifyInclusionProof(proof, rootOf(tree), 16)).toBe(true);
+		}
+	});
+});
+
+// ═══════════════════════════════════════════════════════════════
+// generateConsistencyProof / verifyConsistencyProof
+// ═══════════════════════════════════════════════════════════════
+
+describe("generateConsistencyProof", () => {
+	it("throws RangeError for firstSize < 1", () => {
+		const leaves = makeLeaves(4);
+		expect(() => generateConsistencyProof(0, 4, leaves)).toThrow(RangeError);
+	});
+
+	it("throws RangeError for firstSize > secondSize", () => {
+		const leaves = makeLeaves(4);
+		expect(() => generateConsistencyProof(5, 4, leaves)).toThrow(RangeError);
+	});
+
+	it("throws RangeError for secondSize > leaves.length", () => {
+		const leaves = makeLeaves(4);
+		expect(() => generateConsistencyProof(2, 10, leaves)).toThrow(RangeError);
+	});
+
+	it("returns empty proof when firstSize === secondSize", () => {
+		const leaves = makeLeaves(4);
+		const proof = generateConsistencyProof(4, 4, leaves);
+		expect(proof.proof).toEqual([]);
+		expect(proof.firstSize).toBe(4);
+		expect(proof.secondSize).toBe(4);
+		expect(proof.firstRoot).toBe(proof.secondRoot);
+	});
+
+	it("generates proof for 1->2 (smallest growth)", () => {
+		const leaves = makeLeaves(2);
+		const proof = generateConsistencyProof(1, 2, leaves);
+		expect(proof.firstSize).toBe(1);
+		expect(proof.secondSize).toBe(2);
+		expect(proof.proof.length).toBeGreaterThan(0);
+	});
+
+	it("generates proof for 2->4 (power-of-2 sizes)", () => {
+		const leaves = makeLeaves(4);
+		const proof = generateConsistencyProof(2, 4, leaves);
+		expect(proof.firstSize).toBe(2);
+		expect(proof.secondSize).toBe(4);
+		expect(proof.firstRoot).toBe(buildMerkleTree(leaves.slice(0, 2)).root);
+		expect(proof.secondRoot).toBe(buildMerkleTree(leaves).root);
+	});
+
+	it("generates proof for 3->5 (non-power-of-2 sizes)", () => {
+		const leaves = makeLeaves(5);
+		const proof = generateConsistencyProof(3, 5, leaves);
+		expect(proof.firstSize).toBe(3);
+		expect(proof.secondSize).toBe(5);
+		expect(proof.firstRoot).toBe(buildMerkleTree(leaves.slice(0, 3)).root);
+		expect(proof.secondRoot).toBe(buildMerkleTree(leaves.slice(0, 5)).root);
+	});
+
+	it("generates proof for 1->1 (same size, single leaf)", () => {
+		const leaves = makeLeaves(1);
+		const proof = generateConsistencyProof(1, 1, leaves);
+		expect(proof.proof).toEqual([]);
+		expect(proof.firstRoot).toBe(proof.secondRoot);
+	});
+
+	it("generates proof for m > k split (firstSize > largest power of 2)", () => {
+		const leaves = makeLeaves(8);
+		const proof = generateConsistencyProof(5, 8, leaves);
+		expect(proof.firstSize).toBe(5);
+		expect(proof.secondSize).toBe(8);
+		expect(proof.firstRoot).toBe(buildMerkleTree(leaves.slice(0, 5)).root);
+		expect(proof.secondRoot).toBe(buildMerkleTree(leaves.slice(0, 8)).root);
+	});
+
+	it("generates proof for 4->8 (power-of-2 both)", () => {
+		const leaves = makeLeaves(8);
+		const proof = generateConsistencyProof(4, 8, leaves);
+		expect(proof.firstRoot).toBe(buildMerkleTree(leaves.slice(0, 4)).root);
+		expect(proof.secondRoot).toBe(buildMerkleTree(leaves.slice(0, 8)).root);
+	});
+
+	it("generates proof for 2->3 (even to odd)", () => {
+		const leaves = makeLeaves(3);
+		const proof = generateConsistencyProof(2, 3, leaves);
+		expect(proof.firstRoot).toBe(buildMerkleTree(leaves.slice(0, 2)).root);
+		expect(proof.secondRoot).toBe(buildMerkleTree(leaves.slice(0, 3)).root);
+	});
+});
+
+describe("verifyConsistencyProof", () => {
+	it("returns false for firstSize < 1", () => {
+		expect(
+			verifyConsistencyProof({
+				firstSize: 0,
+				secondSize: 4,
+				firstRoot: "a",
+				secondRoot: "b",
+				proof: [],
+			}),
+		).toBe(false);
+	});
+
+	it("returns false for firstSize > secondSize", () => {
+		expect(
+			verifyConsistencyProof({
+				firstSize: 5,
+				secondSize: 4,
+				firstRoot: "a",
+				secondRoot: "b",
+				proof: [],
+			}),
+		).toBe(false);
+	});
+
+	it("returns true when firstSize === secondSize and roots match with empty proof", () => {
+		const leaves = makeLeaves(4);
+		const tree = buildMerkleTree(leaves);
+		expect(
+			verifyConsistencyProof({
+				firstSize: 4,
+				secondSize: 4,
+				firstRoot: rootOf(tree),
+				secondRoot: rootOf(tree),
+				proof: [],
+			}),
+		).toBe(true);
+	});
+
+	it("returns false when firstSize === secondSize but roots differ", () => {
+		expect(
+			verifyConsistencyProof({
+				firstSize: 4,
+				secondSize: 4,
+				firstRoot: "aa".repeat(32),
+				secondRoot: "bb".repeat(32),
+				proof: [],
+			}),
+		).toBe(false);
+	});
+
+	it("returns false when firstSize === secondSize but proof is non-empty", () => {
+		const leaves = makeLeaves(4);
+		const tree = buildMerkleTree(leaves);
+		expect(
+			verifyConsistencyProof({
+				firstSize: 4,
+				secondSize: 4,
+				firstRoot: rootOf(tree),
+				secondRoot: rootOf(tree),
+				proof: ["extra"],
+			}),
+		).toBe(false);
+	});
+
+	it("returns false when firstSize !== secondSize but proof is empty", () => {
+		expect(
+			verifyConsistencyProof({
+				firstSize: 2,
+				secondSize: 4,
+				firstRoot: "aa".repeat(32),
+				secondRoot: "bb".repeat(32),
+				proof: [],
+			}),
+		).toBe(false);
+	});
+
+	it("verifies valid consistency proof for 1->2", () => {
+		const leaves = makeLeaves(2);
+		const proof = generateConsistencyProof(1, 2, leaves);
+		expect(verifyConsistencyProof(proof)).toBe(true);
+	});
+
+	it("verifies valid consistency proof for 2->4", () => {
+		const leaves = makeLeaves(4);
+		const proof = generateConsistencyProof(2, 4, leaves);
+		expect(verifyConsistencyProof(proof)).toBe(true);
+	});
+
+	it("verifies valid consistency proof for 3->5 (non-power-of-2)", () => {
+		const leaves = makeLeaves(5);
+		const proof = generateConsistencyProof(3, 5, leaves);
+		expect(verifyConsistencyProof(proof)).toBe(true);
+	});
+
+	it("verifies valid consistency proof for 5->8 (m > k branch)", () => {
+		const leaves = makeLeaves(8);
+		const proof = generateConsistencyProof(5, 8, leaves);
+		expect(verifyConsistencyProof(proof)).toBe(true);
+	});
+
+	it("verifies valid consistency proof for 4->8 (both power-of-2)", () => {
+		const leaves = makeLeaves(8);
+		const proof = generateConsistencyProof(4, 8, leaves);
+		expect(verifyConsistencyProof(proof)).toBe(true);
+	});
+
+	it("verifies valid consistency proof for 1->4", () => {
+		const leaves = makeLeaves(4);
+		const proof = generateConsistencyProof(1, 4, leaves);
+		expect(verifyConsistencyProof(proof)).toBe(true);
+	});
+
+	it("verifies valid consistency proof for 2->3 (even to odd)", () => {
+		const leaves = makeLeaves(3);
+		const proof = generateConsistencyProof(2, 3, leaves);
+		expect(verifyConsistencyProof(proof)).toBe(true);
+	});
+
+	it("verifies valid consistency proof for 1->8", () => {
+		const leaves = makeLeaves(8);
+		const proof = generateConsistencyProof(1, 8, leaves);
+		expect(verifyConsistencyProof(proof)).toBe(true);
+	});
+
+	it("rejects consistency proof with tampered firstRoot", () => {
+		const leaves = makeLeaves(4);
+		const proof = generateConsistencyProof(2, 4, leaves);
+		const tampered = { ...proof, firstRoot: "ff".repeat(32) };
+		expect(verifyConsistencyProof(tampered)).toBe(false);
+	});
+
+	it("rejects consistency proof with tampered secondRoot", () => {
+		const leaves = makeLeaves(4);
+		const proof = generateConsistencyProof(2, 4, leaves);
+		const tampered = { ...proof, secondRoot: "ff".repeat(32) };
+		expect(verifyConsistencyProof(tampered)).toBe(false);
+	});
+
+	it("rejects consistency proof with tampered proof nodes", () => {
+		const leaves = makeLeaves(4);
+		const proof = generateConsistencyProof(2, 4, leaves);
+		const tampered = {
+			...proof,
+			proof: proof.proof.map(() => "00".repeat(32)),
+		};
+		expect(verifyConsistencyProof(tampered)).toBe(false);
+	});
+
+	it("verifies valid consistency proof for 3->7 (deeply odd)", () => {
+		const leaves = makeLeaves(7);
+		const proof = generateConsistencyProof(3, 7, leaves);
+		expect(verifyConsistencyProof(proof)).toBe(true);
+	});
+
+	it("verifies valid consistency proof for 6->8 (m > k, non-power-of-2 first)", () => {
+		const leaves = makeLeaves(8);
+		const proof = generateConsistencyProof(6, 8, leaves);
+		expect(verifyConsistencyProof(proof)).toBe(true);
+	});
+
+	it("verifies valid consistency proof for 7->8 (m > k, both near power-of-2)", () => {
+		const leaves = makeLeaves(8);
+		const proof = generateConsistencyProof(7, 8, leaves);
+		expect(verifyConsistencyProof(proof)).toBe(true);
+	});
+
+	it("verifies valid consistency proof for 1->16", () => {
+		const leaves = makeLeaves(16);
+		const proof = generateConsistencyProof(1, 16, leaves);
+		expect(verifyConsistencyProof(proof)).toBe(true);
+	});
+
+	it("verifies valid consistency proof for 8->16 (power-of-2 to power-of-2)", () => {
+		const leaves = makeLeaves(16);
+		const proof = generateConsistencyProof(8, 16, leaves);
+		expect(verifyConsistencyProof(proof)).toBe(true);
+	});
+});
+
+// ═══════════════════════════════════════════════════════════════
+// verifyVault
+// ═══════════════════════════════════════════════════════════════
 
 describe("verifyVault", () => {
 	let vaultPath: string;
@@ -175,7 +924,7 @@ describe("verifyVault", () => {
 		expect(result.chainLength).toBe(3);
 		expect(result.merkleRoot).not.toBeNull();
 		expect(typeof result.merkleRoot).toBe("string");
-		expect(result.merkleRoot?.length).toBe(64); // SHA-256 hex
+		expect(result.merkleRoot?.length).toBe(64);
 	});
 
 	it("reports first and last event timestamps", () => {
@@ -195,9 +944,7 @@ describe("verifyVault", () => {
 			{ kind: "llm_call", actor: "local", data: { cost: 50 } },
 			{ kind: "llm_call", actor: "local", data: { cost: 100 } },
 		]);
-		// Tamper
-		const secondLine = lines[1];
-		if (!secondLine) throw new Error("Expected second line");
+		const secondLine = at(lines, 1);
 		const tampered = JSON.parse(secondLine) as Record<string, unknown>;
 		tampered.data = { cost: 0 };
 		lines[1] = JSON.stringify(tampered);
@@ -227,7 +974,6 @@ describe("verifyVault", () => {
 	});
 
 	it("handles empty vault with audit directory but no logs", () => {
-		// vaultPath already has audit dir from makeTempVault
 		const result = verifyVault(vaultPath);
 		expect(result.valid).toBe(true);
 		expect(result.chainLength).toBe(0);
@@ -244,15 +990,105 @@ describe("verifyVault", () => {
 
 		const result1 = verifyVault(vaultPath);
 
-		// Write same chain to a second vault
 		const vaultPath2 = makeTempVault();
 		try {
 			writeChainToVault(vaultPath2, lines);
 			const result2 = verifyVault(vaultPath2);
-
 			expect(result1.merkleRoot).toBe(result2.merkleRoot);
 		} finally {
 			rmSync(vaultPath2, { recursive: true, force: true });
 		}
+	});
+
+	it("picks up rotated segment files (.jsonl files besides events.jsonl)", () => {
+		const mainLines = buildChain([{ kind: "llm_call", actor: "local", data: { segment: "main" } }]);
+		writeChainToVault(vaultPath, mainLines);
+
+		const rotatedLines = buildChain([
+			{ kind: "llm_call", actor: "local", data: { segment: "rotated" } },
+		]);
+		const rotatedPath = join(vaultPath, "audit", "events-2026-03-15.jsonl");
+		writeFileSync(rotatedPath, `${rotatedLines.join("\n")}\n`);
+
+		const result = verifyVault(vaultPath);
+		expect(result.valid).toBe(true);
+		expect(result.chainLength).toBe(2);
+	});
+
+	it("handles events without timestamps (no firstEvent/lastEvent set)", () => {
+		const event: Record<string, unknown> = {
+			id: "evt-no-ts",
+			previousHash: GENESIS_HASH,
+			kind: "test",
+			actor: "local",
+			data: {},
+		};
+		const canonical = canonicalize(event);
+		const hash = createHash("sha256").update(canonical).digest("hex");
+		const fullEvent = { ...event, hash };
+
+		const logPath = join(vaultPath, "audit", "events.jsonl");
+		writeFileSync(logPath, `${JSON.stringify(fullEvent)}\n`);
+
+		const result = verifyVault(vaultPath);
+		expect(result.valid).toBe(true);
+		expect(result.firstEvent).toBeNull();
+		expect(result.lastEvent).toBeNull();
+	});
+
+	it("handles vault with only rotated segment files (no events.jsonl)", () => {
+		const rotatedLines = buildChain([
+			{ kind: "llm_call", actor: "local", data: { segment: "only-rotated" } },
+		]);
+		const rotatedPath = join(vaultPath, "audit", "segment-001.jsonl");
+		writeFileSync(rotatedPath, `${rotatedLines.join("\n")}\n`);
+
+		const result = verifyVault(vaultPath);
+		expect(result.valid).toBe(true);
+		expect(result.chainLength).toBe(1);
+		expect(result.merkleRoot).not.toBeNull();
+	});
+
+	it("ignores non-.jsonl files in audit directory", () => {
+		const mainLines = buildChain([{ kind: "llm_call", actor: "local", data: {} }]);
+		writeChainToVault(vaultPath, mainLines);
+
+		writeFileSync(join(vaultPath, "audit", "notes.txt"), "not a log file");
+
+		const result = verifyVault(vaultPath);
+		expect(result.valid).toBe(true);
+		expect(result.chainLength).toBe(1);
+	});
+
+	it("handles events.jsonl that exists but is empty (no content after trim)", () => {
+		const logPath = join(vaultPath, "audit", "events.jsonl");
+		writeFileSync(logPath, "  \n  \n  ");
+
+		const result = verifyVault(vaultPath);
+		expect(result.valid).toBe(true);
+		expect(result.chainLength).toBe(0);
+		expect(result.merkleRoot).toBeNull();
+	});
+
+	it("handles vault with all-malformed JSON (no hashes collected, no merkle root)", () => {
+		const logPath = join(vaultPath, "audit", "events.jsonl");
+		writeFileSync(logPath, "NOT JSON\nALSO NOT JSON\n");
+
+		const result = verifyVault(vaultPath);
+		expect(result.valid).toBe(false);
+		expect(result.errors.length).toBeGreaterThan(0);
+		expect(result.merkleRoot).toBeNull();
+	});
+
+	it("skips reading a rotated segment file that was deleted (broken symlink)", () => {
+		const mainLines = buildChain([{ kind: "llm_call", actor: "local", data: { stable: true } }]);
+		writeChainToVault(vaultPath, mainLines);
+
+		const brokenLink = join(vaultPath, "audit", "deleted-segment.jsonl");
+		symlinkSync("/nonexistent/path/file.jsonl", brokenLink);
+
+		const result = verifyVault(vaultPath);
+		expect(result.valid).toBe(true);
+		expect(result.chainLength).toBe(1);
 	});
 });
