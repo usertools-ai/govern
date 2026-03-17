@@ -111,4 +111,56 @@ describe("verifyChain", () => {
 		const result = verifyChain(logPath);
 		expect(result.latestHash).toBe(e2.hash);
 	});
+
+	it("continues chain verification after a malformed JSON line", async () => {
+		const { mkdirSync } = await import("node:fs");
+		mkdirSync(join(tempDir, ".usertools", "audit"), { recursive: true });
+
+		// First line: valid event but broken chain start
+		const event1 = await writer.appendEvent({
+			kind: "test.a",
+			actor: "sys",
+			data: {},
+		});
+
+		// Insert a malformed line between valid events
+		const content = readFileSync(logPath, "utf-8");
+		writeFileSync(logPath, `${content.trim()}\nNOT_VALID_JSON\n`);
+
+		const result = verifyChain(logPath);
+		expect(result.valid).toBe(false);
+		expect(result.eventsVerified).toBe(2);
+		expect(result.errors.some((e) => e.includes("malformed JSON"))).toBe(true);
+	});
+
+	it("detects multiple errors in a single chain", async () => {
+		const { mkdirSync } = await import("node:fs");
+		mkdirSync(join(tempDir, ".usertools", "audit"), { recursive: true });
+
+		// Write a chain with hash and previousHash both wrong
+		const badEvent1 = JSON.stringify({
+			id: "bad-1",
+			timestamp: new Date().toISOString(),
+			previousHash: "wrong_prev",
+			hash: "wrong_hash",
+			kind: "test",
+			actor: "sys",
+			data: {},
+		});
+		const badEvent2 = JSON.stringify({
+			id: "bad-2",
+			timestamp: new Date().toISOString(),
+			previousHash: "also_wrong",
+			hash: "also_wrong_hash",
+			kind: "test",
+			actor: "sys",
+			data: {},
+		});
+		writeFileSync(logPath, `${badEvent1}\n${badEvent2}\n`);
+
+		const result = verifyChain(logPath);
+		expect(result.valid).toBe(false);
+		// Should detect at least previousHash mismatch and hash mismatch errors
+		expect(result.errors.length).toBeGreaterThanOrEqual(2);
+	});
 });

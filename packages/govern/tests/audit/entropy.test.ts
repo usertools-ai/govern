@@ -235,4 +235,159 @@ describe("Entropy — composite score", () => {
 		const parsed = new Date(report.computedAt);
 		expect(parsed.toISOString()).toBe(report.computedAt);
 	});
+
+	it("eventCount reflects the number of input events", () => {
+		const events: EntropyEventInput[] = [
+			{ kind: "a", data: {} },
+			{ kind: "b", data: {} },
+			{ kind: "c", data: {} },
+		];
+		const report = computeEntropyScore(events);
+		expect(report.eventCount).toBe(3);
+	});
+});
+
+describe("Entropy — budget utilization edge cases", () => {
+	it("budgetRemaining/budgetTotal path with utilization <= 80% (no hit)", () => {
+		const events: EntropyEventInput[] = [
+			// 10% utilization via budgetRemaining/budgetTotal path
+			{ kind: "spend", data: { budgetTotal: 1000, budgetRemaining: 900 } },
+		];
+
+		const signal = extractBudgetUtilization(events);
+		expect(signal.total).toBe(1);
+		expect(signal.hits).toBe(0);
+		expect(signal.value).toBe(0);
+	});
+
+	it("ignores events with budget=0 (division guard)", () => {
+		const events: EntropyEventInput[] = [
+			{ kind: "spend", data: { budget: 0, spent: 0 } },
+		];
+
+		const signal = extractBudgetUtilization(events);
+		expect(signal.total).toBe(0);
+		expect(signal.hits).toBe(0);
+	});
+
+	it("ignores events with budgetTotal=0 (division guard)", () => {
+		const events: EntropyEventInput[] = [
+			{ kind: "spend", data: { budgetTotal: 0, budgetRemaining: 0 } },
+		];
+
+		const signal = extractBudgetUtilization(events);
+		expect(signal.total).toBe(0);
+		expect(signal.hits).toBe(0);
+	});
+});
+
+describe("Entropy — circuit breaker edge cases", () => {
+	it("detects half-open state", () => {
+		const events: EntropyEventInput[] = [
+			{ kind: "circuit.breaker", data: { state: "half-open" } },
+		];
+
+		const signal = extractCircuitBreakerTrips(events);
+		expect(signal.hits).toBe(1);
+		expect(signal.total).toBe(1);
+	});
+
+	it("does not count closed state as tripped", () => {
+		const events: EntropyEventInput[] = [
+			{ kind: "circuit.breaker", data: { state: "closed" } },
+		];
+
+		const signal = extractCircuitBreakerTrips(events);
+		expect(signal.hits).toBe(0);
+		expect(signal.total).toBe(1);
+	});
+
+	it("counts circuitBreakerTripped via data field", () => {
+		const events: EntropyEventInput[] = [
+			{ kind: "system", data: { circuitBreaker: true, circuitBreakerTripped: true } },
+		];
+
+		const signal = extractCircuitBreakerTrips(events);
+		expect(signal.hits).toBe(1);
+		expect(signal.total).toBe(1);
+	});
+});
+
+describe("Entropy — pattern memory edge cases", () => {
+	it("counts recurringIssue as a hit", () => {
+		const events: EntropyEventInput[] = [
+			{ kind: "pattern.detect", data: { recurringIssue: true } },
+		];
+
+		const signal = extractPatternMemoryHits(events);
+		expect(signal.hits).toBe(1);
+		expect(signal.total).toBe(1);
+	});
+
+	it("does not count false values as hits", () => {
+		const events: EntropyEventInput[] = [
+			{
+				kind: "pattern.detect",
+				data: { patternMatch: false, anomalyDetected: false, recurringIssue: false },
+			},
+		];
+
+		const signal = extractPatternMemoryHits(events);
+		expect(signal.hits).toBe(0);
+		expect(signal.total).toBe(1);
+	});
+});
+
+describe("Entropy — policy violations edge cases", () => {
+	it("counts 'blocked' decision as a violation", () => {
+		const events: EntropyEventInput[] = [
+			{ kind: "policy.eval", data: { decision: "blocked" } },
+		];
+
+		const signal = extractPolicyViolations(events);
+		expect(signal.hits).toBe(1);
+		expect(signal.total).toBe(1);
+	});
+});
+
+describe("Entropy — PII detection edge cases", () => {
+	it("counts piiAction=block as a detection", () => {
+		const events: EntropyEventInput[] = [
+			{ kind: "scan", data: { piiAction: "block" } },
+		];
+
+		const signal = extractPiiDetections(events);
+		expect(signal.hits).toBe(1);
+	});
+
+	it("does not count piiCount=0 as a detection", () => {
+		const events: EntropyEventInput[] = [
+			{ kind: "scan", data: { piiCount: 0 } },
+		];
+
+		const signal = extractPiiDetections(events);
+		expect(signal.hits).toBe(0);
+	});
+});
+
+describe("Entropy — chain integrity edge cases", () => {
+	it("counts empty errors array as healthy", () => {
+		const events: EntropyEventInput[] = [
+			{ kind: "audit.verify", data: { valid: true, errors: [] } },
+		];
+
+		const signal = extractChainIntegrity(events);
+		expect(signal.hits).toBe(0);
+		expect(signal.total).toBe(1);
+	});
+
+	it("events matching verify in kind are counted", () => {
+		const events: EntropyEventInput[] = [
+			{ kind: "verify.result", data: { valid: true } },
+		];
+
+		const signal = extractChainIntegrity(events);
+		expect(signal.total).toBe(1);
+		expect(signal.hits).toBe(0);
+	});
 });

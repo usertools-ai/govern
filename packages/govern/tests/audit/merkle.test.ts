@@ -209,3 +209,60 @@ describe("Merkle — consistency proofs", () => {
 		expect(() => generateConsistencyProof(1, 5, leaves)).toThrow(RangeError);
 	});
 });
+
+describe("Merkle — verifyConsistencyProof edge cases", () => {
+	it("rejects proof with firstSize < 1", () => {
+		const valid = verifyConsistencyProof({
+			firstSize: 0,
+			secondSize: 2,
+			firstRoot: "a".repeat(64),
+			secondRoot: "b".repeat(64),
+			proof: ["c".repeat(64)],
+		});
+		expect(valid).toBe(false);
+	});
+
+	it("rejects proof with firstSize > secondSize", () => {
+		const valid = verifyConsistencyProof({
+			firstSize: 5,
+			secondSize: 3,
+			firstRoot: "a".repeat(64),
+			secondRoot: "b".repeat(64),
+			proof: ["c".repeat(64)],
+		});
+		expect(valid).toBe(false);
+	});
+
+	it("rejects proof with different sizes but empty proof array", () => {
+		const valid = verifyConsistencyProof({
+			firstSize: 1,
+			secondSize: 3,
+			firstRoot: "a".repeat(64),
+			secondRoot: "b".repeat(64),
+			proof: [],
+		});
+		expect(valid).toBe(false);
+	});
+});
+
+describe("Merkle — inclusion proof for promoted odd leaf", () => {
+	it("verifies proof for the last leaf in a 3-leaf tree (promoted node)", () => {
+		const leaves = [makeLeaf(0), makeLeaf(1), makeLeaf(2)];
+		const { root } = buildMerkleTree(leaves);
+
+		// Leaf at index 2 is the promoted odd leaf
+		const proof = generateInclusionProof(2, leaves, "seg-odd");
+		const valid = verifyInclusionProof(proof, root!, leaves.length);
+		expect(valid).toBe(true);
+	});
+
+	it("generates valid proofs for larger odd-count trees (7 leaves)", () => {
+		const leaves = Array.from({ length: 7 }, (_, i) => makeLeaf(i));
+		const { root } = buildMerkleTree(leaves);
+
+		// Test the last (promoted) leaf specifically
+		const proof = generateInclusionProof(6, leaves, "seg-7");
+		const valid = verifyInclusionProof(proof, root!, leaves.length);
+		expect(valid).toBe(true);
+	});
+});

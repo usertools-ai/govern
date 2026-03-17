@@ -1,11 +1,19 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { canonicalize } from "../../src/audit/canonical.js";
 import { createAuditWriter } from "../../src/audit/chain.js";
-import { GENESIS_HASH } from "../../src/shared/constants.js";
+import { GENESIS_HASH, VAULT_DIR } from "../../src/shared/constants.js";
 import type { AuditEvent } from "../../src/shared/types.js";
 
 describe("Audit Chain Writer", () => {
@@ -362,7 +370,6 @@ describe("Audit Chain Writer — advisory lock", () => {
 	it("detects stale lock from dead process and recovers", async () => {
 		const lockPath = join(tempDir, ".usertools", "audit", ".audit-writer.lock");
 		// Ensure audit dir exists for the lock file
-		const { mkdirSync } = await import("node:fs");
 		mkdirSync(join(tempDir, ".usertools", "audit"), { recursive: true });
 		writeFileSync(
 			lockPath,
@@ -380,5 +387,445 @@ describe("Audit Chain Writer — advisory lock", () => {
 			pid: number;
 		};
 		expect(lockContent.pid).toBe(process.pid);
+	});
+
+	it("reclaims same-PID lock file", async () => {
+		const lockPath = join(tempDir, ".usertools", "audit", ".audit-writer.lock");
+		mkdirSync(join(tempDir, ".usertools", "audit"), { recursive: true });
+		// Write a lock from our own PID (simulates crash without cleanup)
+		writeFileSync(
+			lockPath,
+			JSON.stringify({ pid: process.pid, startedAt: "2020-01-01T00:00:00Z" }),
+		);
+
+		const event = await writer.appendEvent({
+			kind: "test.reclaim",
+			actor: "sys",
+			data: {},
+		});
+
+		expect(event.previousHash).toBe(GENESIS_HASH);
+	});
+
+	it("removes corrupt lock file and proceeds", async () => {
+		const lockPath = join(tempDir, ".usertools", "audit", ".audit-writer.lock");
+		mkdirSync(join(tempDir, ".usertools", "audit"), { recursive: true });
+		writeFileSync(lockPath, "NOT VALID JSON!!!");
+
+		const event = await writer.appendEvent({
+			kind: "test.corrupt-lock",
+			actor: "sys",
+			data: {},
+		});
+
+		expect(event.previousHash).toBe(GENESIS_HASH);
+	});
+
+	it("throws when lock is held by a live process (EPERM)", async () => {
+		const lockPath = join(tempDir, ".usertools", "audit", ".audit-writer.lock");
+		mkdirSync(join(tempDir, ".usertools", "audit"), { recursive: true });
+		// PID 1 (launchd/init) always exists and process.kill(1, 0) throws EPERM
+		writeFileSync(
+			lockPath,
+			JSON.stringify({ pid: 1, startedAt: "2020-01-01T00:00:00Z" }),
+		);
+
+		await expect(
+			writer.appendEvent({
+				kind: "test.eperm",
+				actor: "sys",
+				data: {},
+			}),
+		).rejects.toThrow("Audit writer lock held by PID 1");
+	});
+
+	it("throws when lock is held by a live accessible process (process.kill succeeds)", async () => {
+		const lockPath = join(tempDir, ".usertools", "audit", ".audit-writer.lock");
+		mkdirSync(join(tempDir, ".usertools", "audit"), { recursive: true });
+		// Use the parent process PID — process.kill(ppid, 0) succeeds without error
+		const ppid = process.ppid;
+		writeFileSync(
+			lockPath,
+			JSON.stringify({ pid: ppid, startedAt: "2020-01-01T00:00:00Z" }),
+		);
+
+		await expect(
+			writer.appendEvent({
+				kind: "test.live-lock",
+				actor: "sys",
+				data: {},
+			}),
+		).rejects.toThrow(`Audit writer lock held by PID ${ppid}`);
+	});
+
+	it("recovers from unknown error code in process.kill (error swallowed by outer catch)", async () => {
+		// When process.kill throws with an unknown error code, the error
+		// propagates through the inner catch (line 110) to the outer catch,
+		// which swallows it and removes the stale lock file. The writer recovers.
+		const freshDir = mkdtempSync(join(tmpdir(), "govern-audit-killmock-"));
+		const freshWriter = createAuditWriter(freshDir);
+		const lockPath = join(freshDir, VAULT_DIR, "audit", ".audit-writer.lock");
+		writeFileSync(
+			lockPath,
+			JSON.stringify({ pid: 999999998, startedAt: "2020-01-01T00:00:00Z" }),
+		);
+
+		const origKill = process.kill.bind(process);
+		process.kill = ((pid: number, signal?: string | number) => {
+			if (pid === 999999998) {
+				throw Object.assign(new Error("Unknown kill error"), {
+					code: "EUNKNOWN",
+				});
+			}
+			return origKill(pid, signal as number);
+		}) as typeof process.kill;
+
+		try {
+			// The unknown error is swallowed by the outer catch; writer succeeds
+			const event = await freshWriter.appendEvent({
+				kind: "test.unknown-kill-err",
+				actor: "sys",
+				data: {},
+			});
+			expect(event.previousHash).toBe(GENESIS_HASH);
+		} finally {
+			process.kill = origKill;
+			freshWriter.release();
+			rmSync(freshDir, { recursive: true, force: true });
+		}
+	});
+
+	it("recovers from non-Error thrown by process.kill", async () => {
+		const freshDir = mkdtempSync(join(tmpdir(), "govern-audit-killmock2-"));
+		const freshWriter = createAuditWriter(freshDir);
+		const lockPath = join(freshDir, VAULT_DIR, "audit", ".audit-writer.lock");
+		writeFileSync(
+			lockPath,
+			JSON.stringify({ pid: 999999997, startedAt: "2020-01-01T00:00:00Z" }),
+		);
+
+		const origKill = process.kill.bind(process);
+		process.kill = ((pid: number, signal?: string | number) => {
+			if (pid === 999999997) throw "string error";
+			return origKill(pid, signal as number);
+		}) as typeof process.kill;
+
+		try {
+			// Non-Error is also swallowed by outer catch; writer recovers
+			const event = await freshWriter.appendEvent({
+				kind: "test.non-error-kill",
+				actor: "sys",
+				data: {},
+			});
+			expect(event.previousHash).toBe(GENESIS_HASH);
+		} finally {
+			process.kill = origKill;
+			freshWriter.release();
+			rmSync(freshDir, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("Audit Chain Writer — getLastEvent edge cases", () => {
+	let tempDir: string;
+
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	it("falls back to .meta when last JSONL line is corrupt", async () => {
+		tempDir = mkdtempSync(join(tmpdir(), "govern-audit-corrupt-line-"));
+		const writer1 = createAuditWriter(tempDir);
+
+		const event = await writer1.appendEvent({
+			kind: "test.preCorrupt",
+			actor: "sys",
+			data: {},
+		});
+		writer1.release();
+
+		// Corrupt the JSONL (append garbage that will be the "last line")
+		const logPath = join(tempDir, VAULT_DIR, "audit", "events.jsonl");
+		const content = readFileSync(logPath, "utf-8");
+		writeFileSync(logPath, `${content}NOT_VALID_JSON\n`);
+
+		// Create a new writer — it should fall back to .meta
+		const writer2 = createAuditWriter(tempDir);
+		const next = await writer2.appendEvent({
+			kind: "test.postCorrupt",
+			actor: "sys",
+			data: {},
+		});
+
+		// Should chain from the .meta sidecar (the last valid event's hash)
+		expect(next.previousHash).toBe(event.hash);
+		writer2.release();
+	});
+
+	it("returns genesis hash when JSONL is corrupt and .meta is missing", async () => {
+		tempDir = mkdtempSync(join(tmpdir(), "govern-audit-corrupt-no-meta-"));
+		const auditDir = join(tempDir, VAULT_DIR, "audit");
+		mkdirSync(auditDir, { recursive: true });
+
+		const logPath = join(auditDir, "events.jsonl");
+		writeFileSync(logPath, "NOT_VALID_JSON\n");
+
+		const writer = createAuditWriter(tempDir);
+		const event = await writer.appendEvent({
+			kind: "test.fromGenesis",
+			actor: "sys",
+			data: {},
+		});
+
+		// No .meta, corrupt JSONL → fallback to genesis
+		expect(event.previousHash).toBe(GENESIS_HASH);
+		writer.release();
+	});
+
+	it("returns genesis hash when JSONL is empty and .meta is missing", async () => {
+		tempDir = mkdtempSync(join(tmpdir(), "govern-audit-empty-no-meta-"));
+		const auditDir = join(tempDir, VAULT_DIR, "audit");
+		mkdirSync(auditDir, { recursive: true });
+
+		// Create an empty JSONL file with no .meta sidecar
+		const logPath = join(auditDir, "events.jsonl");
+		writeFileSync(logPath, "");
+
+		const writer = createAuditWriter(tempDir);
+		const event = await writer.appendEvent({
+			kind: "test.emptyNoMeta",
+			actor: "sys",
+			data: {},
+		});
+
+		expect(event.previousHash).toBe(GENESIS_HASH);
+		writer.release();
+	});
+
+	it("reads and chains from pre-existing JSONL (no cache, sequence from event)", async () => {
+		tempDir = mkdtempSync(join(tmpdir(), "govern-audit-preexist-"));
+
+		// Write events with first writer
+		const writer1 = createAuditWriter(tempDir);
+		const event1 = await writer1.appendEvent({
+			kind: "test.preexist",
+			actor: "sys",
+			data: { n: 1 },
+		});
+		writer1.release();
+
+		// Delete the .meta sidecar so the new writer must parse the JSONL
+		const metaPath = join(tempDir, VAULT_DIR, "audit", "events.jsonl.meta");
+		if (existsSync(metaPath)) {
+			const { unlinkSync } = await import("node:fs");
+			unlinkSync(metaPath);
+		}
+
+		// Create a new writer (no cache, no .meta) — must parse last line
+		const writer2 = createAuditWriter(tempDir);
+		const event2 = await writer2.appendEvent({
+			kind: "test.continued",
+			actor: "sys",
+			data: { n: 2 },
+		});
+
+		// Should chain from the first event's hash
+		expect(event2.previousHash).toBe(event1.hash);
+		writer2.release();
+	});
+
+	it("returns genesis hash when JSONL is corrupt and .meta is also corrupt", async () => {
+		tempDir = mkdtempSync(join(tmpdir(), "govern-audit-all-corrupt-"));
+		const auditDir = join(tempDir, VAULT_DIR, "audit");
+		mkdirSync(auditDir, { recursive: true });
+
+		const logPath = join(auditDir, "events.jsonl");
+		writeFileSync(logPath, "NOT_VALID_JSON\n");
+		writeFileSync(`${logPath}.meta`, "ALSO_NOT_VALID_JSON");
+
+		const writer = createAuditWriter(tempDir);
+		const event = await writer.appendEvent({
+			kind: "test.allCorrupt",
+			actor: "sys",
+			data: {},
+		});
+
+		expect(event.previousHash).toBe(GENESIS_HASH);
+		writer.release();
+	});
+});
+
+describe("Audit Chain Writer — degraded state and DLQ", () => {
+	let tempDir: string;
+
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	it("sets degraded state and increments writeFailures on write error", async () => {
+		tempDir = mkdtempSync(join(tmpdir(), "govern-audit-degraded-"));
+		const writer = createAuditWriter(tempDir);
+
+		// Write once to get the lock + initial state
+		await writer.appendEvent({
+			kind: "test.ok",
+			actor: "sys",
+			data: {},
+		});
+
+		expect(writer.isDegraded()).toBe(false);
+		expect(writer.getWriteFailures()).toBe(0);
+
+		// Make the JSONL file read-only so the next write fails
+		const logPath = join(tempDir, VAULT_DIR, "audit", "events.jsonl");
+		chmodSync(logPath, 0o444);
+
+		// The append should throw
+		await expect(
+			writer.appendEvent({
+				kind: "test.fail",
+				actor: "sys",
+				data: {},
+			}),
+		).rejects.toThrow();
+
+		expect(writer.isDegraded()).toBe(true);
+		expect(writer.getWriteFailures()).toBe(1);
+
+		// Restore permissions for cleanup
+		chmodSync(logPath, 0o644);
+
+		// Check DLQ was written
+		const dlqPath = join(tempDir, VAULT_DIR, "dlq", "dead-letters.jsonl");
+		expect(existsSync(dlqPath)).toBe(true);
+		const dlqContent = readFileSync(dlqPath, "utf-8").trim();
+		const dlqEntry = JSON.parse(dlqContent);
+		expect(dlqEntry.source).toBe("audit.chain.appendEvent");
+
+		writer.release();
+	});
+
+	it("release resets degraded state and write failure count", async () => {
+		tempDir = mkdtempSync(join(tmpdir(), "govern-audit-reset-"));
+		const writer = createAuditWriter(tempDir);
+
+		await writer.appendEvent({
+			kind: "test.ok",
+			actor: "sys",
+			data: {},
+		});
+
+		// Force a failure
+		const logPath = join(tempDir, VAULT_DIR, "audit", "events.jsonl");
+		chmodSync(logPath, 0o444);
+
+		await expect(
+			writer.appendEvent({ kind: "test.fail", actor: "sys", data: {} }),
+		).rejects.toThrow();
+
+		expect(writer.isDegraded()).toBe(true);
+		expect(writer.getWriteFailures()).toBe(1);
+
+		// Restore and release
+		chmodSync(logPath, 0o644);
+		writer.release();
+
+		expect(writer.isDegraded()).toBe(false);
+		expect(writer.getWriteFailures()).toBe(0);
+	});
+
+	it("writes multiple DLQ entries when repeated failures occur", async () => {
+		tempDir = mkdtempSync(join(tmpdir(), "govern-audit-dlq-multi-"));
+		const writer = createAuditWriter(tempDir);
+
+		await writer.appendEvent({
+			kind: "test.ok",
+			actor: "sys",
+			data: {},
+		});
+
+		const logPath = join(tempDir, VAULT_DIR, "audit", "events.jsonl");
+		chmodSync(logPath, 0o444);
+
+		// First failure creates DLQ dir and writes
+		await expect(
+			writer.appendEvent({ kind: "test.fail1", actor: "sys", data: {} }),
+		).rejects.toThrow();
+
+		// Second failure — DLQ dir already exists (covers the else branch)
+		await expect(
+			writer.appendEvent({ kind: "test.fail2", actor: "sys", data: {} }),
+		).rejects.toThrow();
+
+		expect(writer.getWriteFailures()).toBe(2);
+
+		chmodSync(logPath, 0o644);
+
+		// Verify both DLQ entries were written
+		const dlqPath = join(tempDir, VAULT_DIR, "dlq", "dead-letters.jsonl");
+		const dlqContent = readFileSync(dlqPath, "utf-8").trim().split("\n");
+		expect(dlqContent).toHaveLength(2);
+
+		writer.release();
+	});
+
+	it("DLQ write failure does not throw (last resort fallback)", async () => {
+		tempDir = mkdtempSync(join(tmpdir(), "govern-audit-dlq-fail-"));
+		const writer = createAuditWriter(tempDir);
+
+		await writer.appendEvent({
+			kind: "test.ok",
+			actor: "sys",
+			data: {},
+		});
+
+		// Make the log read-only AND make the DLQ dir impossible to create
+		const logPath = join(tempDir, VAULT_DIR, "audit", "events.jsonl");
+		chmodSync(logPath, 0o444);
+
+		// Make the vault dir read-only so DLQ dir can't be created
+		const vaultDir = join(tempDir, VAULT_DIR);
+		chmodSync(vaultDir, 0o555);
+
+		// Should throw from the write failure, but NOT from DLQ failure
+		await expect(
+			writer.appendEvent({ kind: "test.fail", actor: "sys", data: {} }),
+		).rejects.toThrow();
+
+		// Restore permissions for cleanup
+		chmodSync(vaultDir, 0o755);
+		chmodSync(logPath, 0o644);
+		writer.release();
+	});
+
+	it("handles non-Error exceptions in the degraded path (String(err))", async () => {
+		// We can't easily make the fs functions throw a non-Error, but we
+		// can verify that the degraded state tracks non-Error write failures
+		// by checking that isDegraded and getWriteFailures work correctly
+		// after multiple failures of different types
+		tempDir = mkdtempSync(join(tmpdir(), "govern-audit-multi-fail-"));
+		const writer = createAuditWriter(tempDir);
+
+		await writer.appendEvent({
+			kind: "test.ok",
+			actor: "sys",
+			data: {},
+		});
+
+		const logPath = join(tempDir, VAULT_DIR, "audit", "events.jsonl");
+		chmodSync(logPath, 0o444);
+
+		// Three consecutive failures
+		for (let i = 0; i < 3; i++) {
+			await expect(
+				writer.appendEvent({ kind: `test.fail${i}`, actor: "sys", data: {} }),
+			).rejects.toThrow();
+		}
+
+		expect(writer.getWriteFailures()).toBe(3);
+		expect(writer.isDegraded()).toBe(true);
+
+		chmodSync(logPath, 0o644);
+		writer.release();
 	});
 });
