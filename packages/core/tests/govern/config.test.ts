@@ -142,7 +142,10 @@ describe("loadConfig()", () => {
 	it("throws ZodError for invalid budget type", async () => {
 		const vaultDir = join(tmpDir, VAULT_DIR);
 		mkdirSync(vaultDir, { recursive: true });
-		writeFileSync(join(vaultDir, "usertrust.config.json"), JSON.stringify({ budget: "not-a-number" }));
+		writeFileSync(
+			join(vaultDir, "usertrust.config.json"),
+			JSON.stringify({ budget: "not-a-number" }),
+		);
 
 		await expect(loadConfig()).rejects.toThrow();
 	});

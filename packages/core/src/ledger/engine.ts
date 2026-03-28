@@ -12,7 +12,7 @@ import { CreateTransferError } from "tigerbeetle-node";
 import { DEFAULT_HOLD_TTL_MS } from "../shared/constants.js";
 import { InsufficientBalanceError } from "../shared/errors.js";
 import { fnv1a32 } from "../shared/ids.js";
-import type { TrustTBClient, TBTransferError } from "./client.js";
+import type { TBTransferError, TrustTBClient } from "./client.js";
 import { XFER_SPEND } from "./client.js";
 import { type ModelRates, PRICING_TABLE, estimateCost } from "./pricing.js";
 

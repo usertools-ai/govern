@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fnv1a32, trustId, tbId } from "../../src/shared/ids.js";
+import { fnv1a32, tbId, trustId } from "../../src/shared/ids.js";
 
 describe("tbId", () => {
 	it("returns a bigint", () => {

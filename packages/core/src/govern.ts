@@ -45,10 +45,10 @@ import { LedgerUnavailableError, PolicyDeniedError } from "./shared/errors.js";
 import { trustId } from "./shared/ids.js";
 import { TrustConfigSchema } from "./shared/types.js";
 import type {
-	TrustConfig,
 	GovernanceReceipt,
 	GovernedResponse,
 	LLMClientKind,
+	TrustConfig,
 } from "./shared/types.js";
 import { type StreamUsage, createGovernedStream } from "./streaming.js";
 

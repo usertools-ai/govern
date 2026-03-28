@@ -23,10 +23,7 @@ import {
 let testDir: string;
 
 beforeEach(() => {
-	testDir = join(
-		tmpdir(),
-		`trust-scope-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-	);
+	testDir = join(tmpdir(), `trust-scope-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 	mkdirSync(testDir, { recursive: true });
 	setStoreDir(testDir);
 });
