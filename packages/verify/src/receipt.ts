@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Usertools, Inc.
+
 /**
  * Terminal receipt renderer for single-transaction verification.
  * Renders a thermal-printer-style receipt using box-drawing characters.

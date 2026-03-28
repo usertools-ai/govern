@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-import { verifyTransaction, verifyVault } from "../src/index.js";
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Usertools, Inc.
+
+import { verifyTransaction, verifyVault } from "./index.js";
 
 const args = process.argv.slice(2);
 
