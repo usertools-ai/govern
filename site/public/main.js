@@ -53,6 +53,31 @@ function initCopyCommand() {
   });
 }
 
+// ── Hero Bliss fade on scroll ──
+function initHeroFade() {
+  const bg = document.getElementById("hero-bg");
+  if (!bg) return;
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  let ticking = false;
+  window.addEventListener("scroll", () => {
+    if (!ticking) {
+      requestAnimationFrame(() => {
+        const scrollY = window.scrollY;
+        const vh = window.innerHeight;
+        // Start fading at 30% of viewport, fully gone by 90%
+        const fadeStart = vh * 0.3;
+        const fadeEnd = vh * 0.9;
+        const progress = Math.min(Math.max((scrollY - fadeStart) / (fadeEnd - fadeStart), 0), 1);
+        bg.style.opacity = 1 - progress;
+        ticking = false;
+      });
+      ticking = true;
+    }
+  });
+}
+
 // ── Nav background on scroll ──
 function initNavScroll() {
   const nav = document.getElementById("nav");
@@ -78,5 +103,6 @@ function initNavScroll() {
 document.addEventListener("DOMContentLoaded", () => {
   initScrollReveal();
   initCopyCommand();
+  initHeroFade();
   initNavScroll();
 });
