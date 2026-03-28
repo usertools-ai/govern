@@ -1,0 +1,8 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "public",
+  "redirects": [
+    { "source": "/github", "destination": "https://github.com/usertools-ai/usertrust", "statusCode": 302 },
+    { "source": "/docs", "destination": "https://github.com/usertools-ai/usertrust#readme", "statusCode": 302 }
+  ]
+}
