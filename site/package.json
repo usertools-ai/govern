@@ -1,11 +1,15 @@
 {
   "name": "usertrust-site",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "npx @tailwindcss/cli -i src/input.css -o public/styles.css --watch",
-    "build": "npx @tailwindcss/cli -i src/input.css -o public/styles.css --minify"
+    "build": "npx @tailwindcss/cli -i src/input.css -o public/styles.css --minify && cp index.html public/index.html"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4"
+  },
+  "dependencies": {
+    "tailwindcss": "^4.2.2"
   }
 }
