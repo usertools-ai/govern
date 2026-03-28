@@ -13,9 +13,9 @@
 	"bugs": "https://github.com/usertools-ai/usertrust/issues",
 	"keywords": ["ai", "governance", "audit", "verify", "hash-chain", "merkle"],
 	"type": "module",
-	"main": "dist/index.js",
-	"types": "dist/index.d.ts",
-	"bin": { "verify": "./dist/bin/verify.js" },
+	"main": "dist/src/index.js",
+	"types": "dist/src/index.d.ts",
+	"bin": { "usertrust-verify": "./dist/bin/verify.js" },
 	"scripts": {
 		"build": "tsc",
 		"prepublishOnly": "tsc"

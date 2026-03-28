@@ -1,13 +1,35 @@
 #!/usr/bin/env node
-import { verifyVault } from "../src/index.js";
+import { verifyTransaction, verifyVault } from "../src/index.js";
 
-const vaultPath = process.argv[2];
+const args = process.argv.slice(2);
+
+// Parse --tx flag
+let vaultPath: string | undefined;
+let txId: string | undefined;
+
+for (let i = 0; i < args.length; i++) {
+	const arg = args[i] as string;
+	if (arg === "--tx" && i + 1 < args.length) {
+		txId = args[i + 1] as string;
+		i++; // skip next arg
+	} else if (!arg.startsWith("--")) {
+		vaultPath = arg;
+	}
+}
 
 if (!vaultPath) {
-	console.log("Usage: npx usertrust-verify <path-to-.usertrust>");
+	console.log("Usage: npx usertrust-verify <path-to-.usertrust> [--tx <transferId>]");
 	process.exit(1);
 }
 
+// ── Single transaction mode ──
+if (txId !== undefined) {
+	const result = verifyTransaction(vaultPath, txId);
+	console.log(result.receipt);
+	process.exit(result.found && result.valid ? 0 : 1);
+}
+
+// ── Full vault verification ──
 const result = verifyVault(vaultPath);
 
 if (result.valid) {
