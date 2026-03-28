@@ -26,7 +26,9 @@ if (!vaultPath) {
 if (txId !== undefined) {
 	const result = verifyTransaction(vaultPath, txId);
 	console.log(result.receipt);
-	process.exit(result.found && result.valid ? 0 : 1);
+	// Exit 0: verified, 1: tampered/corrupted, 2: not found
+	if (!result.found) process.exit(2);
+	process.exit(result.valid ? 0 : 1);
 }
 
 // ── Full vault verification ──

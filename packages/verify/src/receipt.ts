@@ -82,7 +82,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 
 function formatDate(iso: string): string {
 	const d = new Date(iso);
-	const mon = MONTHS[d.getMonth()] as string;
+	const mon = MONTHS[d.getMonth()] ?? "???";
 	const day = d.getDate();
 	const year = d.getFullYear();
 	let hours = d.getHours();
@@ -93,7 +93,7 @@ function formatDate(iso: string): string {
 }
 
 function formatDateObj(d: Date): string {
-	const mon = MONTHS[d.getMonth()] as string;
+	const mon = MONTHS[d.getMonth()] ?? "???";
 	const day = d.getDate();
 	const year = d.getFullYear();
 	let hours = d.getHours();
