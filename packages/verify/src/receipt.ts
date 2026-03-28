@@ -211,7 +211,9 @@ export function renderReceipt(data: ReceiptData): string {
 	} else if (cost !== undefined) {
 		lines.push(row(`${line("  Cost:", `${cost} UT (${formatUsd(cost)})`, WIDTH - 1)} `));
 		lines.push(
-			row(`${line("  Spend:", `${cumulativeSpend} UT (${formatUsd(cumulativeSpend)})`, WIDTH - 1)} `),
+			row(
+				`${line("  Spend:", `${cumulativeSpend} UT (${formatUsd(cumulativeSpend)})`, WIDTH - 1)} `,
+			),
 		);
 	}
 
