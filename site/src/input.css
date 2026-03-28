@@ -69,3 +69,20 @@
 @supports not (backdrop-filter: blur(1px)) {
   .glass { background: rgba(10, 10, 26, 0.85) !important; }
 }
+
+/* Mobile: reduce padding and font sizes */
+@media (max-width: 767px) {
+  .hero-bg {
+    animation: none !important;
+    background-position: center 30%;
+  }
+
+  #lifecycle {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  #lifecycle .text-xl {
+    transform: rotate(90deg);
+  }
+}
