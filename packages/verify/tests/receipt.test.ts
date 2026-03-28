@@ -80,8 +80,8 @@ describe("renderReceipt", () => {
 		expect(output).toContain("tx_test_12345678");
 		expect(output).toContain("claude-haiku-4-5-20251001");
 		expect(output).toContain("anthropic");
-		expect(output).toContain("1 UT");
-		expect(output).toContain("14 UT cumulative");
+		expect(output).toContain("1 UT ($0.0001)");
+		expect(output).toContain("14 UT ($0.0014)");
 		expect(output).toContain("Event 19 of 21");
 		// Truncated hashes
 		expect(output).toContain("33a1bc0f...34e6f5db");

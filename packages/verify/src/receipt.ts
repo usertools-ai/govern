@@ -106,6 +106,16 @@ function formatDateObj(d: Date): string {
 	return `${mon} ${day}, ${year}  ${hours}:${mins} ${ampm}`;
 }
 
+// ── USD conversion ──
+// 1 UT = $0.0001 (one basis point of a cent)
+const UT_TO_USD = 0.0001;
+
+function formatUsd(ut: number): string {
+	const usd = ut * UT_TO_USD;
+	if (usd < 0.01) return `$${usd.toFixed(4)}`;
+	return `$${usd.toFixed(2)}`;
+}
+
 // ── Word wrap ──
 
 function wordWrap(text: string, maxWidth: number): string[] {
@@ -199,8 +209,10 @@ export function renderReceipt(data: ReceiptData): string {
 	if (isFailed) {
 		lines.push(row(`${line("  Cost:", "-- (failed)", WIDTH - 1)} `));
 	} else if (cost !== undefined) {
-		lines.push(row(`${line("  Cost:", `${cost} UT`, WIDTH - 1)} `));
-		lines.push(row(`${line("  Spend:", `${cumulativeSpend} UT cumulative`, WIDTH - 1)} `));
+		lines.push(row(`${line("  Cost:", `${cost} UT (${formatUsd(cost)})`, WIDTH - 1)} `));
+		lines.push(
+			row(`${line("  Spend:", `${cumulativeSpend} UT (${formatUsd(cumulativeSpend)})`, WIDTH - 1)} `),
+		);
 	}
 
 	lines.push(row(`${line("  Status:", status, WIDTH - 1)} `));
