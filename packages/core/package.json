@@ -12,7 +12,7 @@
 		"tigerbeetle-node": "^0.16.0",
 		"minimatch": "^10.0.0",
 		"zod": "^3.23.0",
-		"yaml": "^2.7.0"
+		"yaml": "^2.8.3"
 	},
 	"scripts": {
 		"build": "tsc",
