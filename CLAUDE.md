@@ -1,4 +1,4 @@
-# @usertools/govern
+# usertrust
 
 Open-source AI financial governance SDK. Wraps any LLM client (Anthropic, OpenAI, Google) with a JS Proxy so every AI call becomes an immutable, auditable, double-entry financial transaction.
 
@@ -10,8 +10,8 @@ These are load-bearing. Violating any one breaks the system.
 - **SHA-256 hash-chained audit trail** — Append-only JSONL. Each event's hash covers the previous event's hash via deterministic canonicalization (sorted keys, stripped `undefined`). The first event chains from GENESIS_HASH (64 zeros). Tamper-evident by construction.
 - **Merkle proofs (RFC 6962)** — Domain-separated hashing (0x00 leaf prefix, 0x01 internal prefix). Inclusion and consistency proofs for public verifiability. Odd leaves are promoted (NOT duplicated) to avoid CVE-2012-2459.
 - **TigerBeetle ledger** — Real double-entry accounting with 7 transfer codes (PURCHASE, SPEND, TRANSFER, REFUND, ALLOCATION, TOOL_CALL, A2A_DELEGATION). Not a counter.
-- **`@usertools/verify` is zero-dependency** — Intentionally duplicates `canonicalize()`, `verifyChain()`, `buildMerkleTree()`, and all Merkle proof functions. Do NOT import from `@usertools/govern`. Only uses Node built-ins (`node:crypto`, `node:fs`, `node:path`).
-- **Duck-typed client detection** — `govern()` identifies LLM SDKs by structural shape (Anthropic: `client.messages.create`, OpenAI: `client.chat.completions.create`, Google: `client.models.generateContent`). Never import provider SDKs directly.
+- **`usertrust-verify` is zero-dependency** — Intentionally duplicates `canonicalize()`, `verifyChain()`, `buildMerkleTree()`, and all Merkle proof functions. Do NOT import from `usertrust`. Only uses Node built-ins (`node:crypto`, `node:fs`, `node:path`).
+- **Duck-typed client detection** — `trust()` identifies LLM SDKs by structural shape (Anthropic: `client.messages.create`, OpenAI: `client.chat.completions.create`, Google: `client.models.generateContent`). Never import provider SDKs directly.
 - **Dead-letter queue** — On audit write failure after TigerBeetle success, write to DLQ (fsync'd JSONL). Never throw on audit degradation after the LLM call succeeds.
 
 ## Stack
@@ -32,17 +32,17 @@ These are load-bearing. Violating any one breaks the system.
 
 | Package | Purpose | LOC | Dependencies |
 |---------|---------|-----|-------------|
-| `@usertools/govern` | SDK — proxy wrapper, ledger, audit, policy, board, circuit breaker, patterns | ~6,400 source | tigerbeetle-node, minimatch, zod, yaml |
-| `@usertools/verify` | Standalone vault verifier | ~600 source | **ZERO** (Node built-ins only) |
+| `usertrust` | SDK — proxy wrapper, ledger, audit, policy, board, circuit breaker, patterns | ~6,400 source | tigerbeetle-node, minimatch, zod, yaml |
+| `usertrust-verify` | Standalone vault verifier | ~600 source | **ZERO** (Node built-ins only) |
 
 ## Layout
 
 ```
-packages/govern/
+packages/core/
 ├── src/
-│   ├── index.ts              # Public API barrel (govern, defineConfig, errors, types)
-│   ├── govern.ts             # govern() — the convergence point. Two-phase lifecycle, proxy builders
-│   ├── config.ts             # loadConfig(), defineConfig() — reads govern.config.json
+│   ├── index.ts              # Public API barrel (trust, defineConfig, errors, types)
+│   ├── govern.ts             # trust() — the convergence point. Two-phase lifecycle, proxy builders
+│   ├── config.ts             # loadConfig(), defineConfig() — reads usertrust.config.json
 │   ├── detect.ts             # detectClientKind() — duck typing for Anthropic/OpenAI/Google
 │   ├── proxy.ts              # ProxyConnection — remote governance (stub for v1)
 │   ├── streaming.ts          # GovernedStream — per-provider token accumulation for streaming
@@ -59,15 +59,15 @@ packages/govern/
 │   │   └── director.ts       # Director Alpha/Beta — heuristic review, NOT LLM calls
 │   ├── cli/
 │   │   ├── main.ts           # CLI entry: init, inspect, health, verify, snapshot, tb
-│   │   ├── init.ts           # `govern init` — creates .usertools/ vault
-│   │   ├── inspect.ts        # `govern inspect` — vault bank statement
-│   │   ├── health.ts         # `govern health` — entropy diagnostics
-│   │   ├── verify.ts         # `govern verify` — chain integrity check
-│   │   ├── snapshot.ts       # `govern snapshot` — checkpoint/restore
-│   │   └── tb.ts             # `govern tb` — TigerBeetle process management
+│   │   ├── init.ts           # `usertrust init` — creates .usertrust/ vault
+│   │   ├── inspect.ts        # `usertrust inspect` — vault bank statement
+│   │   ├── health.ts         # `usertrust health` — entropy diagnostics
+│   │   ├── verify.ts         # `usertrust verify` — chain integrity check
+│   │   ├── snapshot.ts       # `usertrust snapshot` — checkpoint/restore
+│   │   └── tb.ts             # `usertrust tb` — TigerBeetle process management
 │   ├── ledger/
-│   │   ├── client.ts         # GovernTBClient — TigerBeetle CRUD with reconnect logic
-│   │   ├── engine.ts         # GovernEngine — two-phase spend with DLQ fallback
+│   │   ├── client.ts         # TrustTBClient — TigerBeetle CRUD with reconnect logic
+│   │   ├── engine.ts         # TrustEngine — two-phase spend with DLQ fallback
 │   │   └── pricing.ts        # 20-model pricing table (usertokens per 1K LLM tokens)
 │   ├── memory/
 │   │   └── patterns.ts       # Pattern memory — prompt hash -> model -> cost -> success routing
@@ -82,8 +82,8 @@ packages/govern/
 │   ├── shared/
 │   │   ├── constants.ts      # GENESIS_HASH, VAULT_DIR, AUDIT_DIR, DEFAULT_BUDGET
 │   │   ├── errors.ts         # 7 domain errors (InsufficientBalance, PolicyDenied, LedgerUnavailable, etc.)
-│   │   ├── ids.ts            # tbId() (u128 bigint), governId() (string), fnv1a32()
-│   │   └── types.ts          # GovernConfig (Zod schema), GovernanceReceipt, PolicyRule, AuditEvent, etc.
+│   │   ├── ids.ts            # tbId() (u128 bigint), trustId() (string), fnv1a32()
+│   │   └── types.ts          # TrustConfig (Zod schema), GovernanceReceipt, PolicyRule, AuditEvent, etc.
 │   └── snapshot/
 │       └── checkpoint.ts     # Vault snapshot — create, restore, list
 ├── tests/                    # Mirrors src/ structure — 38 test files
@@ -114,15 +114,15 @@ This project uses aggressive settings. Code that ignores these will fail typeche
 
 ## Coding Patterns
 
-### The `govern()` Function
+### The `trust()` Function
 
 The core API. Async factory that returns a Proxy-wrapped client.
 
 ```typescript
-import { govern } from "@usertools/govern";
+import { trust } from "usertrust";
 
-// govern() is async
-const client = await govern(new Anthropic(), { dryRun: true, budget: 50_000 });
+// trust() is async
+const client = await trust(new Anthropic(), { dryRun: true, budget: 50_000 });
 
 // Returns { response, governance } — NOT response._governance
 const { response, governance } = await client.messages.create({
@@ -176,31 +176,31 @@ AccountNotFoundError(userId)                            // no TB account
 IdempotencyConflictError(key)                           // duplicate transfer
 LedgerUnavailableError(reason)                          // TB unreachable
 AuditDegradedError(reason)                              // audit chain write failure
-VaultNotInitializedError(path)                          // no .usertools/ vault
+VaultNotInitializedError(path)                          // no .usertrust/ vault
 ```
 
 ### ID Generation
 
 ```typescript
-import { tbId, governId, fnv1a32 } from "./shared/ids.js";
+import { tbId, trustId, fnv1a32 } from "./shared/ids.js";
 tbId()            // bigint — time-ordered u128, for TigerBeetle accounts/transfers
-governId("tx")    // string — "tx_<base36timestamp>_<hex>", for audit/receipts
+trustId("tx")     // string — "tx_<base36timestamp>_<hex>", for audit/receipts
 fnv1a32("str")    // number — FNV-1a 32-bit hash, for user_data_32 fingerprints
 ```
 
 ### Config
 
-Config file is `govern.config.json` (JSON, NOT TypeScript). Located at `.usertools/govern.config.json`. Validated by `GovernConfigSchema` (Zod). `defineConfig()` is a type-checking helper only.
+Config file is `usertrust.config.json` (JSON, NOT TypeScript). Located at `.usertrust/usertrust.config.json`. Validated by `TrustConfigSchema` (Zod). `defineConfig()` is a type-checking helper only.
 
 Key config fields: `budget`, `tier` (free/mini/pro/mega/ultra), `pii` (redact/warn/block/off), `board.enabled`, `board.vetoThreshold`, `circuitBreaker.failureThreshold`, `circuitBreaker.resetTimeout`, `patterns.enabled`, `audit.rotation` (daily/weekly/none), `audit.indexLimit`, `tigerbeetle.addresses`, `tigerbeetle.clusterId`.
 
 ### Dry-Run Mode
 
-Set `dryRun: true` in options or `GOVERN_DRY_RUN=true` env var. Skips TigerBeetle entirely — audit chain and policy engine still run. Use in CI/testing.
+Set `dryRun: true` in options or `USERTRUST_DRY_RUN=true` env var. Skips TigerBeetle entirely — audit chain and policy engine still run. Use in CI/testing.
 
 ### Pattern Memory
 
-Never stores raw prompts — only SHA-256 hashes. Memory file: `.usertools/patterns/memory.json`. Capped at 10,000 entries (FIFO eviction). `suggestModel()` scores by `successRate / avgCost`.
+Never stores raw prompts — only SHA-256 hashes. Memory file: `.usertrust/patterns/memory.json`. Capped at 10,000 entries (FIFO eviction). `suggestModel()` scores by `successRate / avgCost`.
 
 ### Board of Directors
 
@@ -220,8 +220,8 @@ Hard enforcement -> deny. Soft enforcement -> warn (allow with warnings).
 ### Vault Structure
 
 ```
-.usertools/
-├── govern.config.json       # Config
+.usertrust/
+├── usertrust.config.json    # Config
 ├── audit/
 │   ├── events.jsonl         # Hash-chained audit log
 │   ├── events.jsonl.meta    # Last hash + sequence sidecar
@@ -264,8 +264,8 @@ npx vitest run -t "pattern"    # by test name pattern
 
 - **`globals: false`** — Always import `describe`, `it`, `expect`, `vi`, `beforeEach`, `afterEach` from `vitest`.
 - **Mock TigerBeetle** — `vi.mock("tigerbeetle-node", ...)` at module level in every test file that touches the ledger. TB is a native module and never loads in tests.
-- **Temp vaults** — Create isolated temp directories with `mkdirSync(join(tmpdir(), "govern-test-" + randomUUID()))`. Clean up in `afterEach` with `rmSync(dir, { recursive: true, force: true })`.
-- **Inject test engines** — Use `govern(client, { _engine: mockEngine, _audit: mockAudit, dryRun: true, vaultBase: tmpDir })` to inject mock subsystems.
+- **Temp vaults** — Create isolated temp directories with `mkdirSync(join(tmpdir(), "trust-test-" + randomUUID()))`. Clean up in `afterEach` with `rmSync(dir, { recursive: true, force: true })`.
+- **Inject test engines** — Use `trust(client, { _engine: mockEngine, _audit: mockAudit, dryRun: true, vaultBase: tmpDir })` to inject mock subsystems.
 - **All 5 failure modes tested** — `tests/govern/failure-modes.test.ts` covers every combination.
 - **All 12 policy operators tested** — `tests/policy/gate.test.ts` has positive, negative, and edge-case tests for each operator.
 - **Destroy after each test** — Always call `client.destroy()` to prevent process hangs and lock file leaks.
@@ -279,7 +279,7 @@ tests/
 ├── audit/          # chain, canonical, entropy, merkle, rotation, verify
 ├── board/          # board, concerns
 ├── cli/            # init, inspect, health, verify, snapshot, tb, security
-├── e2e/            # Full govern() end-to-end
+├── e2e/            # Full trust() end-to-end
 ├── govern/         # config, destroy, detect, dry-run, failure-modes, govern, proxy, streaming
 ├── ledger/         # client, engine, pricing
 ├── memory/         # patterns
@@ -292,14 +292,14 @@ tests/
 ## CLI Commands
 
 ```bash
-npx @usertools/govern init       # Create .usertools/ vault
-npx @usertools/govern inspect    # Show vault bank statement
-npx @usertools/govern health     # Entropy diagnostics (6 signals, 0-100 score)
-npx @usertools/govern verify     # Verify audit chain integrity
-npx @usertools/govern snapshot   # Checkpoint/restore vault state
-npx @usertools/govern tb         # TigerBeetle process management
+npx usertrust init       # Create .usertrust/ vault
+npx usertrust inspect    # Show vault bank statement
+npx usertrust health     # Entropy diagnostics (6 signals, 0-100 score)
+npx usertrust verify     # Verify audit chain integrity
+npx usertrust snapshot   # Checkpoint/restore vault state
+npx usertrust tb         # TigerBeetle process management
 
-npx @usertools/verify .usertools # Standalone zero-dep vault verification
+npx usertrust-verify .usertrust # Standalone zero-dep vault verification
 ```
 
 ## CI
@@ -314,11 +314,11 @@ Codex review runs on PR open/sync (separate workflow, `ubuntu-latest`, uses `OPE
 
 ## Rules
 
-1. **`@usertools/verify` must remain ZERO dependency.** Code is intentionally duplicated from `@usertools/govern`. Do NOT add imports. Do NOT refactor into a shared package.
+1. **`usertrust-verify` must remain ZERO dependency.** Code is intentionally duplicated from `usertrust`. Do NOT add imports. Do NOT refactor into a shared package.
 2. **Never store raw prompts** — only SHA-256 hashes in pattern memory. Privacy by construction.
 3. **Two-phase lifecycle is non-negotiable.** No LLM call without a PENDING hold. No POST without a preceding PENDING. VOID on every failure path.
-4. **`govern()` must work with any LLM SDK via duck typing.** Do not import `@anthropic-ai/sdk`, `openai`, or `@google/generative-ai` directly in `@usertools/govern` source code. They are optional peer dependencies.
-5. **Audit chain integrity must be verifiable by `@usertools/verify` independently.** Changes to canonicalization, hashing, or event format must be mirrored in both packages.
+4. **`trust()` must work with any LLM SDK via duck typing.** Do not import `@anthropic-ai/sdk`, `openai`, or `@google/generative-ai` directly in `usertrust` source code. They are optional peer dependencies.
+5. **Audit chain integrity must be verifiable by `usertrust-verify` independently.** Changes to canonicalization, hashing, or event format must be mirrored in both packages.
 6. **Board uses heuristic detection, NOT LLM calls.** The 6 concern detectors are pure functions. Do not add API calls to the board module.
 7. **All changes must go through PR with passing CI.** Branch protection enforces lint + typecheck + test.
 8. **Test-to-source ratio must stay above 1.65:1** (financial infrastructure standard). Current: 2.09:1.
