@@ -213,10 +213,7 @@ export function renderReceipt(data: ReceiptData): string {
 	lines.push(row(`${dotted("  Model", model, WIDTH - 1)} `));
 	lines.push(row(`${dotted("  Provider", provider, WIDTH - 1)} `));
 
-	if (isFailed) {
-		lines.push(row(`${dotted("  Cost", "-- (failed)", WIDTH - 1)} `));
-	} else if (cost !== undefined) {
-		lines.push(row(`${dotted("  Cost", `${cost} UT`, WIDTH - 1)} `));
+	if (!isFailed && cost !== undefined) {
 		lines.push(row(`${dotted("  Spend", `${cumulativeSpend} UT`, WIDTH - 1)} `));
 		lines.push(row(`${dotted("  Conversion", formatUsd(cumulativeSpend), WIDTH - 1)} `));
 	}

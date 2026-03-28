@@ -80,7 +80,7 @@ describe("renderReceipt", () => {
 		expect(output).toContain("tx_test_12345678");
 		expect(output).toContain("claude-haiku-4-5-20251001");
 		expect(output).toContain("anthropic");
-		expect(output).toContain("1 UT");
+		expect(output).toContain("14 UT");
 		expect(output).toContain("14 UT");
 		expect(output).toContain("$0.0014");
 		expect(output).toContain("Event 19 of 21");
@@ -110,7 +110,7 @@ describe("renderReceipt", () => {
 		);
 
 		expect(output).toContain("FAILED");
-		expect(output).toContain("-- (failed)");
+		expect(output).not.toContain("Spend");
 		// The error text should appear word-wrapped across lines
 		expect(output).toContain("context window");
 		// Verify wrapping happened: the full error shouldn't appear on a single row
