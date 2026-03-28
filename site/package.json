@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "npx @tailwindcss/cli -i src/input.css -o public/styles.css --watch",
-    "build": "npx @tailwindcss/cli -i src/input.css -o public/styles.css --minify && cp index.html public/index.html"
+    "dev": "npx @tailwindcss/cli -i src/input.css -o public/styles.css --watch & cp src/main.js public/main.js",
+    "build": "npx @tailwindcss/cli -i src/input.css -o public/styles.css --minify && cp index.html public/index.html && cp src/main.js public/main.js"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4"
