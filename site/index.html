@@ -90,18 +90,18 @@
   <!-- ============================================================
        HERO
        ============================================================ -->
-  <section class="relative min-h-screen flex flex-col items-center justify-center text-center px-6 pt-20">
-    <!-- Background image with Ken Burns -->
+  <section class="relative min-h-screen flex flex-col items-center justify-center text-center px-6 pt-20 overflow-hidden">
+    <!-- Background image with Ken Burns — extends 40px below to prevent seam -->
     <div
-      class="hero-bg absolute inset-0 bg-cover bg-center"
+      class="hero-bg absolute -inset-x-0 -top-0 -bottom-10 bg-cover bg-center"
       style="background-image: url('/bliss.jpg'); animation: kenburns 20s ease-in-out infinite alternate;"
       aria-hidden="true"
     ></div>
 
-    <!-- Gradient overlay -->
+    <!-- Gradient overlay — matches extended bg, ends fully opaque -->
     <div
-      class="absolute inset-0"
-      style="background: linear-gradient(to bottom, rgba(10,10,26,0.15) 0%, rgba(10,10,26,0.3) 40%, rgba(10,10,26,0.7) 70%, rgba(10,10,26,0.95) 90%, #0a0a1a 100%);"
+      class="absolute -inset-x-0 -top-0 -bottom-10"
+      style="background: linear-gradient(to bottom, rgba(10,10,26,0.15) 0%, rgba(10,10,26,0.3) 40%, rgba(10,10,26,0.65) 65%, rgba(10,10,26,0.9) 82%, #0a0a1a 95%);"
       aria-hidden="true"
     ></div>
 
