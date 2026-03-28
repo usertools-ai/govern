@@ -59,6 +59,13 @@ function line(left: string, right: string, width: number = WIDTH): string {
 	return left + " ".repeat(gap) + right;
 }
 
+function dotted(label: string, value: string, width: number = WIDTH): string {
+	const minDots = 2;
+	const gap = width - label.length - value.length;
+	if (gap < minDots + 2) return line(label, value, width);
+	return `${label} ${".".repeat(gap - 2)} ${value}`;
+}
+
 function row(content: string): string {
 	return `│${pad(content)}│`;
 }
@@ -201,23 +208,20 @@ export function renderReceipt(data: ReceiptData): string {
 	// ── Transaction details ──
 	lines.push(row(pad("  TRANSACTION RECEIPT")));
 	lines.push(divider());
-	lines.push(row(`${line("  TX:", event.data.transferId, WIDTH - 1)} `));
-	lines.push(row(`${line("  Date:", formatDate(event.timestamp), WIDTH - 1)} `));
-	lines.push(row(`${line("  Model:", model, WIDTH - 1)} `));
-	lines.push(row(`${line("  Provider:", provider, WIDTH - 1)} `));
+	lines.push(row(`${dotted("  TX", event.data.transferId, WIDTH - 1)} `));
+	lines.push(row(`${dotted("  Date", formatDate(event.timestamp), WIDTH - 1)} `));
+	lines.push(row(`${dotted("  Model", model, WIDTH - 1)} `));
+	lines.push(row(`${dotted("  Provider", provider, WIDTH - 1)} `));
 
 	if (isFailed) {
-		lines.push(row(`${line("  Cost:", "-- (failed)", WIDTH - 1)} `));
+		lines.push(row(`${dotted("  Cost", "-- (failed)", WIDTH - 1)} `));
 	} else if (cost !== undefined) {
-		lines.push(row(`${line("  Cost:", `${cost} UT (${formatUsd(cost)})`, WIDTH - 1)} `));
-		lines.push(
-			row(
-				`${line("  Spend:", `${cumulativeSpend} UT (${formatUsd(cumulativeSpend)})`, WIDTH - 1)} `,
-			),
-		);
+		lines.push(row(`${dotted("  Cost", `${cost} UT`, WIDTH - 1)} `));
+		lines.push(row(`${dotted("  Spend", `${cumulativeSpend} UT`, WIDTH - 1)} `));
+		lines.push(row(`${dotted("  Conversion", formatUsd(cumulativeSpend), WIDTH - 1)} `));
 	}
 
-	lines.push(row(`${line("  Status:", status, WIDTH - 1)} `));
+	lines.push(row(`${dotted("  Status", status, WIDTH - 1)} `));
 
 	if (isFailed && event.data.error) {
 		lines.push(blank());
@@ -237,13 +241,13 @@ export function renderReceipt(data: ReceiptData): string {
 	lines.push(row(pad("  CHAIN VERIFICATION")));
 	lines.push(divider());
 	lines.push(
-		row(`${line("  Position:", `Event ${event.sequence} of ${chainLength}`, WIDTH - 1)} `),
+		row(`${dotted("  Position", `Event ${event.sequence} of ${chainLength}`, WIDTH - 1)} `),
 	);
-	lines.push(row(`${line("  Hash:", truncHash(event.hash), WIDTH - 1)} `));
-	lines.push(row(`${line("  Prev:", truncHash(event.previousHash), WIDTH - 1)} `));
+	lines.push(row(`${dotted("  Hash", truncHash(event.hash), WIDTH - 1)} `));
+	lines.push(row(`${dotted("  Prev", truncHash(event.previousHash), WIDTH - 1)} `));
 
 	const merkleStatus = merkleVerified ? "INCLUSION VERIFIED" : "INCLUSION FAILED";
-	lines.push(row(`${line("  Merkle:", merkleStatus, WIDTH - 1)} `));
+	lines.push(row(`${dotted("  Merkle", merkleStatus, WIDTH - 1)} `));
 
 	lines.push(blank());
 
@@ -261,8 +265,8 @@ export function renderReceipt(data: ReceiptData): string {
 
 	// ── Footer ──
 	lines.push(divider());
-	lines.push(row(`${line("  Root:", truncHash(merkleRoot), WIDTH - 1)} `));
-	lines.push(row(`${line("  Verified:", formatDateObj(verifiedAt), WIDTH - 1)} `));
+	lines.push(row(`${dotted("  Root", truncHash(merkleRoot), WIDTH - 1)} `));
+	lines.push(row(`${dotted("  Verified", formatDateObj(verifiedAt), WIDTH - 1)} `));
 	lines.push(blank());
 	lines.push(bottom());
 

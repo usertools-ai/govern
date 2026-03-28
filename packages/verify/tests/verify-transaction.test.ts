@@ -218,7 +218,8 @@ describe("verifyTransaction", () => {
 		expect(result.found).toBe(true);
 		expect(result.valid).toBe(true);
 		// Cumulative spend at tx-b: 5 + 3 = 8
-		expect(result.receipt).toContain("8 UT ($0.0008)");
+		expect(result.receipt).toContain("8 UT");
+		expect(result.receipt).toContain("$0.0008");
 	});
 
 	it("handles llm_call event with no cost field", () => {
@@ -241,6 +242,7 @@ describe("verifyTransaction", () => {
 		expect(result.found).toBe(true);
 		expect(result.valid).toBe(true);
 		// Only tx-withcost's cost (5) counted — tx-nocost has no cost
-		expect(result.receipt).toContain("5 UT ($0.0005)");
+		expect(result.receipt).toContain("5 UT");
+		expect(result.receipt).toContain("$0.0005");
 	});
 });
