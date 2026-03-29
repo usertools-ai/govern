@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, useScroll, useTransform } from "motion/react";
+import Image from "next/image";
 import { useRef } from "react";
 import { CopyCommand } from "./copy-command";
 
@@ -22,14 +23,22 @@ export function Hero() {
 		>
 			{/* Bliss background — scroll-fades */}
 			<motion.div
-				className="hero-bg absolute inset-0 bg-cover bg-center"
+				className="hero-bg absolute inset-0 overflow-hidden"
 				style={{
-					backgroundImage: "url('/bliss.jpg')",
 					animation: "kenburns 20s ease-in-out infinite alternate",
 					opacity: bgOpacity,
 				}}
 				aria-hidden="true"
-			/>
+			>
+				<Image
+					src="/bliss.jpg"
+					alt=""
+					fill
+					priority
+					sizes="100vw"
+					className="object-cover object-center"
+				/>
+			</motion.div>
 
 			{/* Hero content — glass pane */}
 			<div
