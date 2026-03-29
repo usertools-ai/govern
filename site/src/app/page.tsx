@@ -80,7 +80,7 @@ function Hero() {
   }
 
   return (
-    <section className="relative min-h-screen overflow-hidden flex items-start justify-start pt-[18vh]">
+    <section className="relative min-h-screen overflow-hidden flex flex-col items-center justify-start text-center px-6 pt-[18vh]">
       {/* Bliss background with Ken Burns */}
       <div
         className="absolute inset-0 z-0"
@@ -98,7 +98,7 @@ function Hero() {
       </div>
 
       {/* Glass content pane */}
-      <div className="relative z-10 w-full max-w-2xl mx-auto px-6 sm:px-0">
+      <div className="relative z-10 w-full max-w-3xl mx-auto flex flex-col items-center">
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -118,7 +118,7 @@ function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1.2, delay: 0.3 }}
           >
-            <span className="inline-block rounded-full bg-white/[0.06] border border-white/[0.1] px-3 py-1 text-xs text-[var(--text-secondary)]">
+            <span className="inline-block rounded-full bg-[var(--accent-ut)]/10 border border-[var(--accent-ut)]/25 px-4 py-1.5 text-xs font-medium text-[var(--accent-ut)]" style={{ fontFamily: "var(--font-mono)" }}>
               Open source &middot; Apache 2.0
             </span>
           </motion.div>
