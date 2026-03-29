@@ -24,8 +24,8 @@ export function BYOK() {
 					</ScrollReveal>
 					<ScrollReveal delay={0.1}>
 						<p className="text-base text-white/60 leading-relaxed">
-							trust() wraps your existing provider client. No proxy. No routing.
-							No new accounts. Just trust on top of what you already use.
+							trust() wraps your existing provider client. No proxy. No routing. No new accounts.
+							Just trust on top of what you already use.
 						</p>
 					</ScrollReveal>
 				</div>
@@ -39,12 +39,8 @@ export function BYOK() {
 								className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl border border-white/[0.08] hover:border-white/20 transition-colors duration-200"
 								style={{ background: "rgba(255,255,255,0.03)" }}
 							>
-								<span className="text-sm font-medium text-white/80">
-									{p.name}
-								</span>
-								<span className="text-xs text-white/35 font-mono">
-									{p.detail}
-								</span>
+								<span className="text-sm font-medium text-white/80">{p.name}</span>
+								<span className="text-xs text-white/35 font-mono">{p.detail}</span>
 							</div>
 						))}
 
@@ -53,9 +49,7 @@ export function BYOK() {
 							style={{ background: "rgba(52,211,153,0.04)" }}
 						>
 							<span className="text-sm font-medium text-ut/80">+ more</span>
-							<span className="text-xs text-white/35 font-mono">
-								Any provider
-							</span>
+							<span className="text-xs text-white/35 font-mono">Any provider</span>
 						</div>
 					</div>
 				</ScrollReveal>

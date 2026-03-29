@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef } from "react";
 import { motion, useScroll, useTransform } from "motion/react";
+import { useRef } from "react";
 import { CopyCommand } from "./copy-command";
 
 export function Hero() {
@@ -71,8 +71,7 @@ export function Hero() {
 						transition={{ duration: 0.6, ease: "easeOut", delay: 0.2 }}
 						className="text-4xl sm:text-5xl md:text-6xl font-bold text-white leading-tight"
 						style={{
-							textShadow:
-								"0 0 80px rgba(0,0,0,0.8), 0 4px 40px rgba(0,0,0,0.6)",
+							textShadow: "0 0 80px rgba(0,0,0,0.8), 0 4px 40px rgba(0,0,0,0.6)",
 						}}
 					>
 						your AI spend
@@ -86,8 +85,8 @@ export function Hero() {
 					transition={{ duration: 0.6, ease: "easeOut", delay: 0.32 }}
 					className="max-w-lg text-base sm:text-lg text-white/60 leading-relaxed"
 				>
-					Budget holds, audit trails, and spend limits for every LLM call. Keep
-					your keys, keep your billing. Add trust in one line.
+					Budget holds, audit trails, and spend limits for every LLM call. Keep your keys, keep your
+					billing. Add trust in one line.
 				</motion.p>
 
 				{/* Install command */}

@@ -12,22 +12,13 @@ export function Nav() {
 
 			<div className="flex items-center gap-6">
 				<div className="hidden md:flex items-center gap-5 text-sm text-white/60 font-medium">
-					<a
-						href="#code"
-						className="hover:text-white transition-colors duration-200"
-					>
+					<a href="#code" className="hover:text-white transition-colors duration-200">
 						Code
 					</a>
-					<a
-						href="#features"
-						className="hover:text-white transition-colors duration-200"
-					>
+					<a href="#features" className="hover:text-white transition-colors duration-200">
 						Features
 					</a>
-					<a
-						href="#how"
-						className="hover:text-white transition-colors duration-200"
-					>
+					<a href="#how" className="hover:text-white transition-colors duration-200">
 						How it works
 					</a>
 				</div>

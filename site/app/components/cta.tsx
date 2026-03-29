@@ -1,7 +1,7 @@
 "use client";
 
-import { ScrollReveal } from "./scroll-reveal";
 import { GitHubIcon } from "./github-icon";
+import { ScrollReveal } from "./scroll-reveal";
 
 export function CTA() {
 	return (
@@ -9,14 +9,12 @@ export function CTA() {
 			<div className="max-w-[640px] mx-auto flex flex-col items-center gap-8 text-center">
 				<div className="flex flex-col gap-4">
 					<ScrollReveal>
-						<h2 className="text-4xl sm:text-5xl font-bold leading-tight">
-							Read every line
-						</h2>
+						<h2 className="text-4xl sm:text-5xl font-bold leading-tight">Read every line</h2>
 					</ScrollReveal>
 					<ScrollReveal delay={0.1}>
 						<p className="text-base text-white/60 leading-relaxed">
-							Your trust layer shouldn&apos;t be a black box. UserTrust is open
-							source under the Apache 2.0 license.
+							Your trust layer shouldn&apos;t be a black box. UserTrust is open source under the
+							Apache 2.0 license.
 						</p>
 					</ScrollReveal>
 				</div>

@@ -91,8 +91,7 @@ export function Features() {
 					</ScrollReveal>
 					<ScrollReveal delay={0.2}>
 						<p className="text-base text-white/60 leading-relaxed">
-							Observability tells you what happened. Governance prevents what
-							shouldn&apos;t.
+							Observability tells you what happened. Governance prevents what shouldn&apos;t.
 						</p>
 					</ScrollReveal>
 				</div>
@@ -113,12 +112,8 @@ export function Features() {
 										<div className={`w-3 h-3 rounded-sm ${styles.icon}`} />
 									</div>
 									<div className="flex flex-col gap-1.5">
-										<h3 className="font-semibold text-white text-base">
-											{card.title}
-										</h3>
-										<p className="text-sm text-white/55 leading-relaxed">
-											{card.description}
-										</p>
+										<h3 className="font-semibold text-white text-base">{card.title}</h3>
+										<p className="text-sm text-white/55 leading-relaxed">{card.description}</p>
 									</div>
 								</div>
 							</ScrollReveal>
