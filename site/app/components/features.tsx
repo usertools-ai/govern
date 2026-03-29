@@ -64,7 +64,7 @@ export function Features() {
 				{/* Header */}
 				<div className="flex flex-col gap-4 max-w-xl">
 					<ScrollReveal>
-						<p className="text-xs font-mono font-medium text-ut uppercase tracking-widest">
+						<p className="text-xs font-medium text-ut uppercase tracking-widest">
 							What you get
 						</p>
 					</ScrollReveal>
@@ -94,7 +94,7 @@ export function Features() {
 									<div className="flex items-center gap-2.5">
 										<span className={`w-1.5 h-1.5 rounded-full ${s.dot} shrink-0`} />
 										<span
-											className={`text-[10px] font-mono tracking-[0.12em] uppercase ${s.label} opacity-60`}
+											className={`text-[10px] tracking-[0.12em] uppercase ${s.label} opacity-60`}
 										>
 											{card.subtitle}
 										</span>
