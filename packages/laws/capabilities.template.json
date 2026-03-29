@@ -1,0 +1,53 @@
+{
+	"capabilities": {
+		"gate:quality": {
+			"triggers": {
+				"preToolUse": ["Bash:git commit", "Bash:gh pr create"]
+			},
+			"mode": "block",
+			"models": ["gpt-5.4", "o3"],
+			"priority": 100,
+			"dedup": "none"
+		},
+		"review:code": {
+			"triggers": {
+				"postToolUse": ["Write:*.ts", "Write:*.tsx", "Edit:*.ts", "Edit:*.tsx"]
+			},
+			"mode": "advisory",
+			"models": ["gpt-5.4", "claude-opus-4-6", "gemini-3.1-pro-preview"],
+			"priority": 90,
+			"minEdits": 3,
+			"debounceMs": 5000,
+			"dedup": "debounce"
+		},
+		"observe:debug": {
+			"triggers": {
+				"postToolUse": ["Bash:exit!=0"]
+			},
+			"mode": "inject",
+			"models": ["o3", "claude-opus-4-6"],
+			"priority": 85,
+			"dedup": "debounce"
+		},
+		"scaffold:route": {
+			"triggers": {
+				"preToolUse": ["Write:src/routes/*.ts"]
+			},
+			"mode": "inject",
+			"models": ["claude-opus-4-6"],
+			"priority": 50
+		},
+		"scaffold:test": {
+			"triggers": {
+				"preToolUse": ["Write:**/tests/**/*.test.ts"]
+			},
+			"mode": "inject",
+			"models": ["claude-opus-4-6"],
+			"priority": 50
+		}
+	},
+	"disabled": [],
+	"maxPerEvent": 3,
+	"sessionDedup": true,
+	"debug": false
+}
