@@ -1,0 +1,14 @@
+{
+  "redirects": [
+    {
+      "source": "/github",
+      "destination": "https://github.com/usertools/usertrust",
+      "permanent": false
+    },
+    {
+      "source": "/docs",
+      "destination": "https://github.com/usertools/usertrust#readme",
+      "permanent": false
+    }
+  ]
+}
