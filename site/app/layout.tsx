@@ -39,6 +39,18 @@ export const metadata: Metadata = {
 	icons: { icon: "/favicon.svg" },
 };
 
+const jsonLd = {
+	"@context": "https://schema.org",
+	"@type": "SoftwareApplication",
+	name: "UserTrust",
+	applicationCategory: "DeveloperApplication",
+	license: "https://www.apache.org/licenses/LICENSE-2.0",
+	offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+	author: { "@type": "Organization", name: "Usertools Inc" },
+	url: "https://usertrust.ai",
+	description: "Budget holds, audit trails, and spend limits for every LLM call.",
+};
+
 export default function RootLayout({
 	children,
 }: {
@@ -46,27 +58,13 @@ export default function RootLayout({
 }) {
 	return (
 		<html lang="en">
-			<head>
-				<script
-					type="application/ld+json"
-					dangerouslySetInnerHTML={{
-						__html: JSON.stringify({
-							"@context": "https://schema.org",
-							"@type": "SoftwareApplication",
-							name: "UserTrust",
-							applicationCategory: "DeveloperApplication",
-							license: "https://www.apache.org/licenses/LICENSE-2.0",
-							offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-							author: { "@type": "Organization", name: "Usertools Inc" },
-							url: "https://usertrust.ai",
-							description:
-								"Budget holds, audit trails, and spend limits for every LLM call.",
-						}),
-					}}
-				/>
-			</head>
 			<body className="bg-brand-bg text-white font-sans antialiased overflow-x-hidden">
 				{children}
+				<script
+					type="application/ld+json"
+					// biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD structured data requires this pattern
+					dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+				/>
 			</body>
 		</html>
 	);
