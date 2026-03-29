@@ -1,0 +1,16 @@
+{
+  "framework": "nextjs",
+  "outputDirectory": ".next",
+  "redirects": [
+    {
+      "source": "/github",
+      "destination": "https://github.com/usertools-ai/usertrust",
+      "permanent": false
+    },
+    {
+      "source": "/docs",
+      "destination": "https://github.com/usertools-ai/usertrust#readme",
+      "permanent": false
+    }
+  ]
+}
