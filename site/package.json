@@ -3,13 +3,22 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "npx @tailwindcss/cli -i src/input.css -o public/styles.css --watch & cp src/main.js public/main.js",
-    "build": "npx @tailwindcss/cli -i src/input.css -o public/styles.css --minify && cp index.html public/index.html && cp src/main.js public/main.js"
-  },
-  "devDependencies": {
-    "@tailwindcss/cli": "^4"
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start"
   },
   "dependencies": {
-    "tailwindcss": "^4.2.2"
+    "next": "^15.3.3",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "motion": "^12.12.1",
+    "tailwindcss": "^4.2.2",
+    "@tailwindcss/postcss": "^4.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "typescript": "^5.9.0"
   }
 }
