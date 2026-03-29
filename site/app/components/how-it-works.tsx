@@ -36,37 +36,26 @@ function FlowConnector({
 /*  Architectural annotation block                                     */
 /* ------------------------------------------------------------------ */
 function ArchAnnotation({
-	receives,
-	outputs,
-	detail,
+	description,
+	bullets,
 	constraint,
 }: {
-	receives: string;
-	outputs: string;
-	detail?: string;
+	description: string;
+	bullets: string[];
 	constraint: string;
 }) {
 	return (
-		<div className="space-y-3">
-			<div>
-				<span className="text-[10px] font-mono tracking-[0.15em] uppercase text-white/35 block mb-1">
-					Receives
-				</span>
-				<p className="text-white/50 font-mono text-xs leading-relaxed">{receives}</p>
-			</div>
-			<div>
-				<span className="text-[10px] font-mono tracking-[0.15em] uppercase text-white/35 block mb-1">
-					Outputs
-				</span>
-				<p className="text-white/50 font-mono text-xs leading-relaxed">{outputs}</p>
-			</div>
-			{detail && <p className="text-white/30 text-xs leading-relaxed italic">{detail}</p>}
-			<div>
-				<span className="text-[10px] font-mono tracking-[0.15em] uppercase text-white/25 block mb-1">
-					Must Never
-				</span>
-				<p className="text-white/30 font-mono text-[10px] leading-relaxed">{constraint}</p>
-			</div>
+		<div className="flex flex-col gap-4">
+			<p className="text-base text-white/60 leading-relaxed">{description}</p>
+			<ul className="flex flex-col gap-3">
+				{bullets.map((b) => (
+					<li key={b} className="flex items-start gap-3 text-sm text-white/60">
+						<span className="mt-0.5 w-1.5 h-1.5 rounded-full bg-ut shrink-0" />
+						{b}
+					</li>
+				))}
+			</ul>
+			<p className="text-xs font-mono text-white/25 mt-1">Must never: {constraint}</p>
 		</div>
 	);
 }
@@ -128,10 +117,13 @@ export function HowItWorks() {
 								Budget hold creation
 							</p>
 							<ArchAnnotation
-								receives="trust(client) call with estimated cost from pricing table"
-								outputs="transferId (u128) + PENDING hold on user's budget"
-								detail="Double-entry debit from AVAILABLE, credit to RESERVED. Same pattern banks use for credit card holds."
-								constraint="Execute the LLM call, skip budget verification, allow negative balances"
+								description="Before any LLM call executes, trust() reserves tokens from the user's budget — the same hold pattern banks use for credit card authorizations."
+								bullets={[
+									"Double-entry debit from AVAILABLE, credit to RESERVED",
+									"Estimated cost calculated from the 20-model pricing table",
+									"Returns a transferId that tracks the hold through its lifecycle",
+								]}
+								constraint="execute the LLM call, skip budget verification, allow negative balances"
 							/>
 						</ScrollReveal>
 					</div>
@@ -154,10 +146,13 @@ export function HowItWorks() {
 								Policy gate + LLM call
 							</p>
 							<ArchAnnotation
-								receives="ActionRequest with active budget hold"
-								outputs="LLM Response + usage metrics (input/output tokens)"
-								detail="Policy gate evaluates PII, model allowlist, rate limits, and spend limits before forwarding to the provider."
-								constraint="Forward without a PENDING hold, bypass policy evaluation, cache responses"
+								description="The policy gate evaluates every request before it reaches the provider. PII detection, model allowlists, rate limits, and spend caps — all enforced before the call, not after."
+								bullets={[
+									"12 field operators for flexible policy rules (YAML or JSON)",
+									"Duck-typed provider detection — Anthropic, OpenAI, Google, any SDK",
+									"Response includes token usage for actual cost settlement",
+								]}
+								constraint="forward without a PENDING hold, bypass policy evaluation, cache responses"
 							/>
 						</ScrollReveal>
 					</div>
@@ -189,10 +184,13 @@ export function HowItWorks() {
 								Settlement on success
 							</p>
 							<ArchAnnotation
-								receives="Successful LLM response with token usage"
-								outputs="Settled hold + governance receipt + audit chain entry"
-								detail="Actual cost calculated from token usage × pricing. Delta refund if overestimated. Hash-chained to all prior events."
-								constraint="Settle without a preceding PENDING, skip audit chain append"
+								description="On success, the hold is settled at the actual cost — calculated from real token usage, not the estimate. Any overage is refunded immediately."
+								bullets={[
+									"Actual cost = input tokens × rate + output tokens × rate",
+									"Delta between estimate and actual refunded to AVAILABLE",
+									"Receipt appended to SHA-256 hash chain (tamper-evident)",
+								]}
+								constraint="settle without a preceding PENDING, skip audit chain append"
 							/>
 						</ScrollReveal>
 					</div>
@@ -211,10 +209,13 @@ export function HowItWorks() {
 								Release on failure
 							</p>
 							<ArchAnnotation
-								receives="LLM failure (transient, permanent, or timeout)"
-								outputs="Released hold (full refund) + error audit event"
-								detail="Entire hold returned to AVAILABLE. Error classified and recorded. DLQ fallback if audit write fails after void."
-								constraint="Charge partial amounts on failure, suppress errors, skip DLQ"
+								description="On failure, the entire hold is released — zero charge. The error is classified and recorded in the audit trail, never suppressed."
+								bullets={[
+									"Full hold amount returned to AVAILABLE immediately",
+									"Error classified: transient, permanent, or timeout",
+									"Dead-letter queue fallback if audit write fails after void",
+								]}
+								constraint="charge partial amounts on failure, suppress errors, skip DLQ"
 							/>
 						</ScrollReveal>
 					</div>
@@ -247,10 +248,13 @@ export function HowItWorks() {
 								Hash-chained audit proof
 							</p>
 							<ArchAnnotation
-								receives="Settlement or void outcome from POST/VOID phase"
-								outputs="GovernanceReceipt (transferId, cost, settled, auditHash, model)"
-								detail="Each receipt's SHA-256 hash covers the previous event's hash. Chain starts from GENESIS_HASH (64 zeros). Tamper-evident by construction."
-								constraint="Modify historical receipts, break the hash chain, skip the GENESIS anchor"
+								description="Every call produces an immutable receipt — a hash-chained proof that links to every prior transaction. Tamper-evident by construction."
+								bullets={[
+									"Each SHA-256 hash covers the previous event's hash",
+									"Chain anchored from GENESIS_HASH (64 zeros)",
+									"RFC 6962 Merkle proofs for public verifiability",
+								]}
+								constraint="modify historical receipts, break the hash chain, skip the GENESIS anchor"
 							/>
 						</ScrollReveal>
 					</div>
