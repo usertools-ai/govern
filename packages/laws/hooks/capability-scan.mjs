@@ -2,14 +2,14 @@
 // hooks/capability-scan.mjs
 // SessionStart hook: scans enabled plugins, merges overrides, writes capability cache.
 
-import { dirname, join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { atomicWrite } from "./capability-controllers/state.mjs";
 
-const CACHE_PATH = process.env.USERTRUST_CACHE_PATH
-	?? join(process.cwd(), ".usertrust", ".capability-cache.json");
-const OVERRIDES_PATH = process.env.USERTRUST_CAPABILITIES_PATH
-	?? join(process.cwd(), ".usertrust", "capabilities.json");
+const CACHE_PATH =
+	process.env.USERTRUST_CACHE_PATH ?? join(process.cwd(), ".usertrust", ".capability-cache.json");
+const OVERRIDES_PATH =
+	process.env.USERTRUST_CAPABILITIES_PATH ?? join(process.cwd(), ".usertrust", "capabilities.json");
 const PLUGINS_CACHE = join(process.env.HOME ?? "", ".claude/plugins/cache");
 const SETTINGS_PATH = join(process.env.HOME ?? "", ".claude/settings.json");
 
@@ -126,7 +126,13 @@ async function main() {
 	}
 
 	// 2. Read overrides
-	let overrides = { capabilities: {}, disabled: [], maxPerEvent: 3, sessionDedup: true, debug: false };
+	let overrides = {
+		capabilities: {},
+		disabled: [],
+		maxPerEvent: 3,
+		sessionDedup: true,
+		debug: false,
+	};
 	try {
 		overrides = { ...overrides, ...JSON.parse(readFileSync(OVERRIDES_PATH, "utf8")) };
 	} catch {
@@ -151,7 +157,9 @@ async function main() {
 	atomicWrite(CACHE_PATH, JSON.stringify(cache, null, 2));
 
 	if (overrides.debug) {
-		console.error(`[usertrust-laws] Scanned ${plugins.length} plugins, ${Object.keys(overrides.capabilities).length} capabilities configured`);
+		console.error(
+			`[usertrust-laws] Scanned ${plugins.length} plugins, ${Object.keys(overrides.capabilities).length} capabilities configured`,
+		);
 	}
 }
 

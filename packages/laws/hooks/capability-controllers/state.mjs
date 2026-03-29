@@ -16,8 +16,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 
-const STATE_ROOT = process.env.USERTRUST_STATE_DIR
-	?? ".usertrust/.capability-state";
+const STATE_ROOT = process.env.USERTRUST_STATE_DIR ?? ".usertrust/.capability-state";
 
 /**
  * Derive session directory path from session_id.
@@ -81,7 +80,7 @@ export function writeState(dir, state) {
  */
 export function appendEdit(dir, edit) {
 	const filePath = join(dir, "edits.jsonl");
-	const line = JSON.stringify(edit) + "\n";
+	const line = `${JSON.stringify(edit)}\n`;
 	// appendFileSync is atomic enough for single-line appends on POSIX
 	appendFileSync(filePath, line);
 }
@@ -98,8 +97,11 @@ export function readEdits(dir) {
 			.split("\n")
 			.filter(Boolean)
 			.flatMap((line) => {
-				try { return [JSON.parse(line)]; }
-				catch { return []; }
+				try {
+					return [JSON.parse(line)];
+				} catch {
+					return [];
+				}
 			});
 	} catch {
 		return [];

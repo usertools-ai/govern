@@ -12,10 +12,7 @@ export function redact(text) {
 	return text
 		.replace(/\b(ut-proxy-|sk-|pk_test_|pk_live_)[a-zA-Z0-9_-]{10,}/g, "[REDACTED_KEY]")
 		.replace(/\b(Bearer\s+)[a-zA-Z0-9._-]{20,}/g, "$1[REDACTED_TOKEN]")
-		.replace(
-			/eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}/g,
-			"[REDACTED_JWT]",
-		)
+		.replace(/eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}/g, "[REDACTED_JWT]")
 		.replace(/(ws|postgres|redis|mongodb|mysql):\/\/[^\s'"]+/g, "[REDACTED_CONN]")
 		.replace(/^export\s+\w+=.*/gm, "[REDACTED_ENV]")
 		.replace(/password['":\s]*=?\s*['"]?[^\s'"]{8,}/gi, "password=[REDACTED]");

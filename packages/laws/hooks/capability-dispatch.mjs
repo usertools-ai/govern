@@ -4,23 +4,23 @@
 // Usage: node capability-dispatch.mjs <eventType>
 //   eventType: userPromptSubmit | preToolUse | postToolUse
 
+import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
 import { isExcluded } from "./capability-controllers/redact.mjs";
 import { route } from "./capability-controllers/route.mjs";
 import {
 	appendEdit,
+	clearEdits,
 	consumeResults,
 	countInFlight,
 	isPending,
 	readEdits,
 	readState,
 	sessionDir,
-	writeState,
 	writePending,
-	clearEdits,
+	writeState,
 } from "./capability-controllers/state.mjs";
 
 // Kill switch
@@ -29,8 +29,8 @@ if (process.env.CAPABILITY_DISPATCHER_DISABLED === "1") {
 }
 
 const EVENT_TYPE = process.argv[2];
-const CACHE_PATH = process.env.USERTRUST_CACHE_PATH
-	?? join(process.cwd(), ".usertrust", ".capability-cache.json");
+const CACHE_PATH =
+	process.env.USERTRUST_CACHE_PATH ?? join(process.cwd(), ".usertrust", ".capability-cache.json");
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
@@ -197,14 +197,9 @@ async function main() {
 			}
 			if (cap.name.startsWith("scaffold:")) {
 				try {
-					const { generateScaffold } = await import(
-						"./capability-controllers/scaffold.mjs"
-					);
+					const { generateScaffold } = await import("./capability-controllers/scaffold.mjs");
 					const scaffoldType = cap.name.split(":")[1] ?? "route";
-					const result = await generateScaffold(
-						toolInput.file_path ?? "",
-						scaffoldType,
-					);
+					const result = await generateScaffold(toolInput.file_path ?? "", scaffoldType);
 					if (result) output.push(result);
 				} catch (err) {
 					const message = err instanceof Error ? err.message : String(err);
@@ -275,9 +270,7 @@ async function main() {
 			const debugMatch = matches.find((m) => m.name === "observe:debug");
 			if (debugMatch) {
 				try {
-					const { analyzeFailure } = await import(
-						"./capability-controllers/observe-debug.mjs"
-					);
+					const { analyzeFailure } = await import("./capability-controllers/observe-debug.mjs");
 					const edits = readEdits(dir);
 					const result = await analyzeFailure(
 						toolInput.command ?? "",

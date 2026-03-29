@@ -12,8 +12,8 @@ import { isExcluded, redact } from "./redact.mjs";
 import { atomicWrite, clearEdits, readEdits } from "./state.mjs";
 
 const PROJECT_NAME = process.env.USERTRUST_PROJECT_NAME ?? "this project";
-const PROJECT_CONTEXT = process.env.USERTRUST_PROJECT_CONTEXT
-	?? "TypeScript project with strict mode enabled.";
+const PROJECT_CONTEXT =
+	process.env.USERTRUST_PROJECT_CONTEXT ?? "TypeScript project with strict mode enabled.";
 
 const MODELS = ["gpt-5.4", "claude-opus-4-6", "gemini-3.1-pro-preview"];
 
@@ -59,12 +59,11 @@ function computeDiff(files) {
 			try {
 				const content = readFileSync(file, "utf8");
 				parts.push(
-					`--- /dev/null\n+++ b/${file}\n@@ -0,0 +1,${content.split("\n").length} @@\n` +
-						content
-							.split("\n")
-							.map((l) => `+${l}`)
-							.join("\n")
-							.slice(0, 3000),
+					`--- /dev/null\n+++ b/${file}\n@@ -0,0 +1,${content.split("\n").length} @@\n${content
+						.split("\n")
+						.map((l) => `+${l}`)
+						.join("\n")
+						.slice(0, 3000)}`,
 				);
 			} catch {
 				// File doesn't exist or can't be read
@@ -75,9 +74,7 @@ function computeDiff(files) {
 
 	// Truncate long diffs to stay within model context limits
 	if (diff.length > 12_000) {
-		diff =
-			diff.slice(0, 12_000) +
-			`\n... (diff truncated, ${diff.length} chars total)`;
+		diff = `${diff.slice(0, 12_000)}\n... (diff truncated, ${diff.length} chars total)`;
 	}
 
 	return diff;
@@ -169,10 +166,7 @@ function mergeFindings(allFindings) {
 	}
 
 	// Sort by severity (critical first)
-	merged.sort(
-		(a, b) =>
-			(SEVERITY_ORDER[a.severity] ?? 3) - (SEVERITY_ORDER[b.severity] ?? 3),
-	);
+	merged.sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 3) - (SEVERITY_ORDER[b.severity] ?? 3));
 
 	return merged;
 }
@@ -227,9 +221,7 @@ async function main() {
 		});
 
 		// 5. Parse findings from each model
-		const allFindings = responses.flatMap((r) =>
-			parseFindings(r.content, r.model),
-		);
+		const allFindings = responses.flatMap((r) => parseFindings(r.content, r.model));
 
 		// 6. Merge and deduplicate
 		const merged = mergeFindings(allFindings);
@@ -237,23 +229,16 @@ async function main() {
 		// 7. Format human-readable output
 		const output =
 			merged.length > 0
-				? `**Code Review** (${merged.length} finding${merged.length === 1 ? "" : "s"} from ${MODELS.length}-model ensemble)\n\n` +
-					merged
+				? `**Code Review** (${merged.length} finding${merged.length === 1 ? "" : "s"} from ${MODELS.length}-model ensemble)\n\n${merged
 						.map(
 							(f) =>
-								`- **${f.severity.toUpperCase()}** \`${f.file}:${f.line}\`: ${f.finding}` +
-								(f.suggestion ? `\n  Fix: ${f.suggestion}` : "") +
-								` _(${f.models.join(", ")})_`,
+								`- **${f.severity.toUpperCase()}** \`${f.file}:${f.line}\`: ${f.finding}${f.suggestion ? `\n  Fix: ${f.suggestion}` : ""} _(${f.models.join(", ")})_`,
 						)
-						.join("\n")
+						.join("\n")}`
 				: "[Code Review] No issues found by triple-model ensemble.";
 
 		// 8. Write result to session state for injection on next event
-		const resultFile = join(
-			sessionDir,
-			"results",
-			`review-code-${Date.now()}.json`,
-		);
+		const resultFile = join(sessionDir, "results", `review-code-${Date.now()}.json`);
 		atomicWrite(
 			resultFile,
 			JSON.stringify({
@@ -262,8 +247,7 @@ async function main() {
 				filesReviewed: [...new Set(files)],
 				models: MODELS,
 				timestamp: new Date().toISOString(),
-				originEventTimestamp:
-					edits[edits.length - 1]?.timestamp ?? Date.now(),
+				originEventTimestamp: edits[edits.length - 1]?.timestamp ?? Date.now(),
 			}),
 		);
 

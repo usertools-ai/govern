@@ -53,13 +53,13 @@ function runDeterministicChecks() {
  */
 function getDiffContent() {
 	try {
-		const diff = execSync(
-			"git diff --cached 2>/dev/null || git diff 2>/dev/null",
-			{ timeout: 5_000, encoding: "utf8" },
-		);
+		const diff = execSync("git diff --cached 2>/dev/null || git diff 2>/dev/null", {
+			timeout: 5_000,
+			encoding: "utf8",
+		});
 		// Truncate long diffs — models don't need 50KB patches
 		if (diff.length > 8000) {
-			return diff.slice(0, 8000) + "\n... (diff truncated, " + diff.length + " chars total)";
+			return `${diff.slice(0, 8000)}\n... (diff truncated, ${diff.length} chars total)`;
 		}
 		return diff || "(no changes detected)";
 	} catch {
@@ -90,9 +90,7 @@ export async function runGate(sessionDir) {
 		await new Promise((resolve) => setTimeout(resolve, 3_000));
 		const lateResults = consumeResults(sessionDir, state.lastClearTimestamp);
 		if (lateResults.length > 0) {
-			priorFindings +=
-				"\n" +
-				lateResults.map((r) => JSON.stringify(r.content.findings ?? r.content, null, 2)).join("\n");
+			priorFindings += `\n${lateResults.map((r) => JSON.stringify(r.content.findings ?? r.content, null, 2)).join("\n")}`;
 		}
 	}
 
@@ -124,7 +122,11 @@ Should this commit proceed? Consider:
 Respond with JSON only: { "vote": "pass" | "block", "reason": "explanation" }`;
 
 	// Prompt is already redacted above — skip proxy-level redaction to avoid double-sanitizing
-	const responses = await callParallel(MODELS, prompt, { timeoutMs: 25_000, maxTokens: 512, skipRedaction: true });
+	const responses = await callParallel(MODELS, prompt, {
+		timeoutMs: 25_000,
+		maxTokens: 512,
+		skipRedaction: true,
+	});
 
 	// Parse votes
 	const votes = responses.map((r) => {
@@ -147,9 +149,7 @@ Respond with JSON only: { "vote": "pass" | "block", "reason": "explanation" }`;
 		// Both model calls failed — degrade to advisory (deterministic checks already passed)
 		return {
 			pass: true,
-			reason:
-				"Model-based review skipped due to proxy error. Deterministic checks passed.\n" +
-				votes.map((v) => `${v.model}: ${v.reason}`).join("\n"),
+			reason: `Model-based review skipped due to proxy error. Deterministic checks passed.\n${votes.map((v) => `${v.model}: ${v.reason}`).join("\n")}`,
 		};
 	}
 
@@ -160,9 +160,7 @@ Respond with JSON only: { "vote": "pass" | "block", "reason": "explanation" }`;
 	if (anyBlock) {
 		return {
 			pass: false,
-			reason:
-				"Model-based quality gate blocked this commit:\n" +
-				votes.map((v) => `${v.model} [${v.vote}]: ${v.reason}`).join("\n"),
+			reason: `Model-based quality gate blocked this commit:\n${votes.map((v) => `${v.model} [${v.vote}]: ${v.reason}`).join("\n")}`,
 		};
 	}
 

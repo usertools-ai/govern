@@ -4,7 +4,7 @@
 // Reads existing files in the target directory and generates pattern-aware
 // guidance via Opus. Returns context for injection before file creation.
 
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { basename, dirname, extname, join } from "node:path";
 import { callProxy, extractContent } from "./proxy-client.mjs";
 import { isExcluded, redact } from "./redact.mjs";
@@ -19,18 +19,21 @@ const MODEL = "claude-opus-4-6";
  */
 const SCAFFOLD_CONFIGS = {
 	route: {
-		context: process.env.USERTRUST_SCAFFOLD_ROUTE_CONTEXT
-			?? `This is a route handler file.\n\nFollow the existing patterns in the directory for imports, exports, and structure.`,
+		context:
+			process.env.USERTRUST_SCAFFOLD_ROUTE_CONTEXT ??
+			"This is a route handler file.\n\nFollow the existing patterns in the directory for imports, exports, and structure.",
 		glob: "*.ts",
 	},
 	test: {
-		context: process.env.USERTRUST_SCAFFOLD_TEST_CONTEXT
-			?? `This is a test file.\n\nFollow the existing patterns in the directory for test structure, imports, and assertions.`,
+		context:
+			process.env.USERTRUST_SCAFFOLD_TEST_CONTEXT ??
+			"This is a test file.\n\nFollow the existing patterns in the directory for test structure, imports, and assertions.",
 		glob: "*.test.ts",
 	},
 	provider: {
-		context: process.env.USERTRUST_SCAFFOLD_PROVIDER_CONTEXT
-			?? `This is a provider adapter file.\n\nFollow the existing patterns in the directory.`,
+		context:
+			process.env.USERTRUST_SCAFFOLD_PROVIDER_CONTEXT ??
+			"This is a provider adapter file.\n\nFollow the existing patterns in the directory.",
 		glob: "*.ts",
 	},
 };
@@ -55,9 +58,7 @@ function readExistingPatterns(dir, glob) {
 				const content = readFileSync(join(dir, f), "utf8");
 				return {
 					name: f,
-					content:
-						content.slice(0, 2000) +
-						(content.length > 2000 ? "\n... (truncated)" : ""),
+					content: content.slice(0, 2000) + (content.length > 2000 ? "\n... (truncated)" : ""),
 				};
 			} catch {
 				return { name: f, content: "(unreadable)" };
@@ -87,9 +88,7 @@ export async function generateScaffold(filePath, scaffoldType) {
 
 	const existingContext =
 		existingFiles.length > 0
-			? existingFiles
-					.map((f) => `--- ${f.name} ---\n${f.content}`)
-					.join("\n\n")
+			? existingFiles.map((f) => `--- ${f.name} ---\n${f.content}`).join("\n\n")
 			: "(no existing files in this directory)";
 
 	const prompt = `You are generating scaffolding guidance for a new file in ${PROJECT_NAME}.

@@ -1,7 +1,7 @@
 {
-  "name": "usertrust-laws",
-  "version": "0.1.0",
-  "description": "UserTrust Laws — AI-powered quality gates, continuous code review, debug analysis, and scaffolding for Claude Code. The rules your AI agents can't break.",
-  "author": "Usertools, Inc.",
-  "homepage": "https://usertrust.ai"
+	"name": "usertrust-laws",
+	"version": "0.1.0",
+	"description": "UserTrust Laws — AI-powered quality gates, continuous code review, debug analysis, and scaffolding for Claude Code. The rules your AI agents can't break.",
+	"author": "Usertools, Inc.",
+	"homepage": "https://usertrust.ai"
 }

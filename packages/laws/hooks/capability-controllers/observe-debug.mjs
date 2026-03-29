@@ -7,8 +7,8 @@ import { callParallel } from "./proxy-client.mjs";
 import { redact } from "./redact.mjs";
 
 const PROJECT_NAME = process.env.USERTRUST_PROJECT_NAME ?? "this project";
-const PROJECT_CONTEXT = process.env.USERTRUST_PROJECT_CONTEXT
-	?? "TypeScript project with strict mode enabled.";
+const PROJECT_CONTEXT =
+	process.env.USERTRUST_PROJECT_CONTEXT ?? "TypeScript project with strict mode enabled.";
 
 const MODELS = ["o3", "claude-opus-4-6"];
 
@@ -25,12 +25,10 @@ function buildPrompt(command, exitCode, output, recentFiles) {
 	const lines = output.split("\n");
 	const truncated =
 		lines.length > 100
-			? `... (${lines.length - 100} lines omitted)\n` +
-				lines.slice(-100).join("\n")
+			? `... (${lines.length - 100} lines omitted)\n${lines.slice(-100).join("\n")}`
 			: output;
 
-	const filesList =
-		recentFiles.length > 0 ? recentFiles.join("\n") : "(none)";
+	const filesList = recentFiles.length > 0 ? recentFiles.join("\n") : "(none)";
 
 	return `A command failed in ${PROJECT_NAME}.
 
@@ -101,38 +99,23 @@ function mergeAnalyses(analyses) {
 
 	if (agree) {
 		// Elevate confidence
-		const confidence =
-			a.confidence === "high" || b.confidence === "high"
-				? "high"
-				: "medium"; // Agreement elevates to at least medium
-		return (
-			`**Root Cause Analysis** (${MODELS.join(" + ")} — AGREE, confidence: ${confidence})\n\n` +
-			`**Root cause:** ${a.rootCause}\n` +
-			(a.likelyFile ? `**Likely file:** \`${a.likelyFile}\`\n` : "") +
-			`**Suggested fix:** ${a.suggestedFix}` +
-			(b.suggestedFix && b.suggestedFix !== a.suggestedFix
+		const confidence = a.confidence === "high" || b.confidence === "high" ? "high" : "medium"; // Agreement elevates to at least medium
+		return `**Root Cause Analysis** (${MODELS.join(" + ")} — AGREE, confidence: ${confidence})\n\n**Root cause:** ${a.rootCause}\n${a.likelyFile ? `**Likely file:** \`${a.likelyFile}\`\n` : ""}**Suggested fix:** ${a.suggestedFix}${
+			b.suggestedFix && b.suggestedFix !== a.suggestedFix
 				? `\n**Additional suggestion (${b.model}):** ${b.suggestedFix}`
-				: "")
-		);
+				: ""
+		}`;
 	}
 
 	// Disagree — present both
-	return (
-		`**Root Cause Analysis** (${MODELS.join(" + ")} — DISAGREE, review both)\n\n` +
-		valid.map((a) => formatSingle(a)).join("\n\n---\n\n")
-	);
+	return `**Root Cause Analysis** (${MODELS.join(" + ")} — DISAGREE, review both)\n\n${valid.map((a) => formatSingle(a)).join("\n\n---\n\n")}`;
 }
 
 /**
  * Format a single analysis for display.
  */
 function formatSingle(a) {
-	return (
-		`**${a.model}** (confidence: ${a.confidence})\n` +
-		`**Root cause:** ${a.rootCause}\n` +
-		(a.likelyFile ? `**Likely file:** \`${a.likelyFile}\`\n` : "") +
-		`**Suggested fix:** ${a.suggestedFix}`
-	);
+	return `**${a.model}** (confidence: ${a.confidence})\n**Root cause:** ${a.rootCause}\n${a.likelyFile ? `**Likely file:** \`${a.likelyFile}\`\n` : ""}**Suggested fix:** ${a.suggestedFix}`;
 }
 
 /**
@@ -144,19 +127,12 @@ function formatSingle(a) {
  * @param {object[]} recentEdits — array of { file, timestamp, tool } from session edits
  * @returns {Promise<string|null>} formatted analysis for injection, or null on failure
  */
-export async function analyzeFailure(
-	command,
-	exitCode,
-	commandOutput,
-	recentEdits,
-) {
+export async function analyzeFailure(command, exitCode, commandOutput, recentEdits) {
 	// Don't analyze trivial failures (e.g., grep no match, test --list)
 	if (!command || !commandOutput) return null;
 
 	const editsArray = Array.isArray(recentEdits) ? recentEdits : [];
-	const recentFiles = [
-		...new Set(editsArray.map((e) => e?.file).filter(Boolean)),
-	];
+	const recentFiles = [...new Set(editsArray.map((e) => e?.file).filter(Boolean))];
 	const prompt = buildPrompt(command, exitCode, commandOutput, recentFiles);
 	const safePrompt = redact(prompt);
 

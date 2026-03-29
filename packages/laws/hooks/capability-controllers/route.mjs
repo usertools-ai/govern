@@ -8,8 +8,7 @@ const PROJECT_DESC = process.env.USERTRUST_PROJECT_DESC ?? "A software project";
 
 const SEARCH_SIGNALS =
 	/\b(how does|what is|best practice|compare|alternative|competitor|latest|current)\b/i;
-const MEMORY_SIGNALS =
-	/\b(we discussed|last time|remember|previous|earlier|before)\b/i;
+const MEMORY_SIGNALS = /\b(we discussed|last time|remember|previous|earlier|before)\b/i;
 
 const ROUTER_MODEL = "claude-opus-4-6";
 
@@ -124,7 +123,7 @@ export async function route(prompt) {
 	// LLM returned empty or failed — fall back to prefilter with generic briefs
 	const fallbackBriefs = {};
 	for (const c of candidates) {
-		fallbackBriefs[c] = `Activated by keyword match (LLM router unavailable)`;
+		fallbackBriefs[c] = "Activated by keyword match (LLM router unavailable)";
 	}
 	return { capabilities: candidates, briefs: fallbackBriefs };
 }

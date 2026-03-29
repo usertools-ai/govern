@@ -3,8 +3,8 @@
 
 import { redact } from "./redact.mjs";
 
-const PROXY_URL = process.env.USERTRUST_PROXY_URL
-	?? "https://proxy.usertools.ai/v1/chat/completions";
+const PROXY_URL =
+	process.env.USERTRUST_PROXY_URL ?? "https://proxy.usertools.ai/v1/chat/completions";
 const DEFAULT_TIMEOUT_MS = 25_000;
 const DEFAULT_MAX_TOKENS = 4096;
 
@@ -74,7 +74,7 @@ export function extractContent(response) {
 	if (Array.isArray(raw)) {
 		return raw
 			.filter((p) => p.type === "text" || typeof p === "string")
-			.map((p) => (typeof p === "string" ? p : p.text ?? ""))
+			.map((p) => (typeof p === "string" ? p : (p.text ?? "")))
 			.join("");
 	}
 	return typeof raw === "string" ? raw : String(raw);

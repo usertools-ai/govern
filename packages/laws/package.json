@@ -1,26 +1,14 @@
 {
-  "name": "@usertrust/laws",
-  "version": "0.1.0",
-  "description": "AI-powered dev-time governance for Claude Code — quality gates, continuous review, debug analysis, scaffolding",
-  "type": "module",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/usertools-ai/usertrust.git",
-    "directory": "packages/laws"
-  },
-  "files": [
-    ".claude-plugin/",
-    "hooks/",
-    "capabilities.template.json",
-    "README.md"
-  ],
-  "keywords": [
-    "claude-code",
-    "plugin",
-    "governance",
-    "code-review",
-    "quality-gate",
-    "usertrust"
-  ]
+	"name": "@usertrust/laws",
+	"version": "0.1.0",
+	"description": "AI-powered dev-time governance for Claude Code — quality gates, continuous review, debug analysis, scaffolding",
+	"type": "module",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/usertools-ai/usertrust.git",
+		"directory": "packages/laws"
+	},
+	"files": [".claude-plugin/", "hooks/", "capabilities.template.json", "README.md"],
+	"keywords": ["claude-code", "plugin", "governance", "code-review", "quality-gate", "usertrust"]
 }
