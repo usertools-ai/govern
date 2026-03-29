@@ -1,13 +1,14 @@
 {
+  "framework": "nextjs",
   "redirects": [
     {
       "source": "/github",
-      "destination": "https://github.com/usertools/usertrust",
+      "destination": "https://github.com/usertools-ai/usertrust",
       "permanent": false
     },
     {
       "source": "/docs",
-      "destination": "https://github.com/usertools/usertrust#readme",
+      "destination": "https://github.com/usertools-ai/usertrust#readme",
       "permanent": false
     }
   ]
