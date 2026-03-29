@@ -1,32 +1,6 @@
 @import "tailwindcss";
 
-@font-face {
-	font-family: "Usertools Sans";
-	src: url("/fonts/UsertoolsSans-Regular.woff2") format("woff2");
-	font-weight: 400;
-	font-display: swap;
-}
-
-@font-face {
-	font-family: "Usertools Sans";
-	src: url("/fonts/UsertoolsSans-Medium.woff2") format("woff2");
-	font-weight: 500;
-	font-display: swap;
-}
-
-@font-face {
-	font-family: "Usertools Sans";
-	src: url("/fonts/UsertoolsSans-Bold.woff2") format("woff2");
-	font-weight: 600 700;
-	font-display: swap;
-}
-
-@font-face {
-	font-family: "JetBrains Mono";
-	src: url("/fonts/JetBrainsMono[wght].woff2") format("woff2");
-	font-weight: 400 700;
-	font-display: swap;
-}
+/* Fonts loaded via next/font/local in layout.tsx — CSS variables injected on <html> */
 
 @theme {
 	--color-brand-bg: #0a0a1a;
@@ -41,8 +15,8 @@
 	--color-warning: #f59e0b;
 	--color-danger: #ef4444;
 
-	--font-sans: "Usertools Sans", "Geist Variable", -apple-system, BlinkMacSystemFont, sans-serif;
-	--font-mono: "JetBrains Mono", "SF Mono", "Cascadia Code", monospace;
+	--font-sans: var(--font-usertools), -apple-system, BlinkMacSystemFont, sans-serif;
+	--font-mono: var(--font-jetbrains), "SF Mono", "Cascadia Code", monospace;
 }
 
 /* Ken Burns zoom on hero background */

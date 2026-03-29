@@ -1,5 +1,22 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 import "./globals.css";
+
+const usertoolsSans = localFont({
+	src: [
+		{ path: "../public/fonts/UsertoolsSans-Regular.woff2", weight: "400" },
+		{ path: "../public/fonts/UsertoolsSans-Medium.woff2", weight: "500" },
+		{ path: "../public/fonts/UsertoolsSans-Bold.woff2", weight: "600 700" },
+	],
+	variable: "--font-usertools",
+	display: "swap",
+});
+
+const jetbrainsMono = localFont({
+	src: [{ path: "../public/fonts/JetBrainsMono[wght].woff2", weight: "400 700" }],
+	variable: "--font-jetbrains",
+	display: "swap",
+});
 
 export const metadata: Metadata = {
 	title: "usertrust — trust() your AI spend",
@@ -57,7 +74,7 @@ export default function RootLayout({
 	children: React.ReactNode;
 }) {
 	return (
-		<html lang="en">
+		<html lang="en" className={`${usertoolsSans.variable} ${jetbrainsMono.variable}`}>
 			<body className="bg-brand-bg text-white font-sans antialiased overflow-x-hidden">
 				{children}
 				<script
