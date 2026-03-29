@@ -21,9 +21,7 @@ function FlowConnector({
 				<span className="text-[10px] sm:text-[11px] tracking-[0.12em] text-white/40 block">
 					{label}
 				</span>
-				{sublabel && (
-					<span className="text-[9px] text-white/25 block mt-0.5">{sublabel}</span>
-				)}
+				{sublabel && <span className="text-[9px] text-white/25 block mt-0.5">{sublabel}</span>}
 			</div>
 			<svg width="10" height="16" className="text-white/25" role="img" aria-label="Flow arrow">
 				<path d="M5,0 L5,11 M2,8 L5,14 L8,8" stroke="currentColor" strokeWidth="0.75" fill="none" />
