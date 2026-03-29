@@ -66,9 +66,9 @@ function initHeroFade() {
       requestAnimationFrame(() => {
         const scrollY = window.scrollY;
         const vh = window.innerHeight;
-        // Start fading at 30% of viewport, fully gone by 90%
-        const fadeStart = vh * 0.3;
-        const fadeEnd = vh * 0.9;
+        // Start fading immediately, fully gone by 50% of viewport
+        const fadeStart = 0;
+        const fadeEnd = vh * 0.5;
         const progress = Math.min(Math.max((scrollY - fadeStart) / (fadeEnd - fadeStart), 0), 1);
         bg.style.opacity = 1 - progress;
         ticking = false;
