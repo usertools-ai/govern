@@ -13,12 +13,12 @@
  * Output: .usertrust-gate1/gate1-reports/YYYY-MM-DD-HHMMSS.json
  */
 
-import Anthropic from "@anthropic-ai/sdk";
-import OpenAI from "openai";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { hostname as getHostname } from "node:os";
 import { join } from "node:path";
+import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { trust } from "../packages/core/src/index.js";
 
 // ── Config ──────────────────────────────────────────────────────────────────
@@ -29,9 +29,7 @@ const MODELS = {
 		{ name: "claude-sonnet-4-6", maxTokens: 256 },
 		{ name: "claude-opus-4-6", maxTokens: 128 },
 	],
-	openai: [
-		{ name: "gpt-4.1-nano", maxTokens: 256 },
-	],
+	openai: [{ name: "gpt-4.1-nano", maxTokens: 256 }],
 } as const;
 
 const VAULT_BASE = join(process.cwd(), ".usertrust-gate1");
@@ -85,37 +83,19 @@ async function testBasicCall(
 			const text = response.content?.[0]?.text ?? "";
 			if (!text.includes("GATE1_OK")) {
 				return {
-					scenario: "basic_call", model, provider, passed: false,
+					scenario: "basic_call",
+					model,
+					provider,
+					passed: false,
 					durationMs: Date.now() - start,
 					error: `Expected GATE1_OK, got: ${text.slice(0, 100)}`,
 				};
 			}
 			return {
-				scenario: "basic_call", model, provider, passed: true,
-				durationMs: Date.now() - start,
-				receipt: {
-					transferId: receipt.transferId,
-					settled: receipt.settled,
-					cost: receipt.cost,
-					auditDegraded: receipt.auditDegraded ?? false,
-				},
-			};
-		} else {
-			const { response, receipt } = await (client as any).chat.completions.create({
+				scenario: "basic_call",
 				model,
-				max_tokens: 128,
-				messages: [{ role: "user", content: "Reply with exactly: GATE1_OK" }],
-			});
-			const text = response.choices?.[0]?.message?.content ?? "";
-			if (!text.includes("GATE1_OK")) {
-				return {
-					scenario: "basic_call", model, provider, passed: false,
-					durationMs: Date.now() - start,
-					error: `Expected GATE1_OK, got: ${text.slice(0, 100)}`,
-				};
-			}
-			return {
-				scenario: "basic_call", model, provider, passed: true,
+				provider,
+				passed: true,
 				durationMs: Date.now() - start,
 				receipt: {
 					transferId: receipt.transferId,
@@ -125,10 +105,43 @@ async function testBasicCall(
 				},
 			};
 		}
+		const { response, receipt } = await (client as any).chat.completions.create({
+			model,
+			max_tokens: 128,
+			messages: [{ role: "user", content: "Reply with exactly: GATE1_OK" }],
+		});
+		const text = response.choices?.[0]?.message?.content ?? "";
+		if (!text.includes("GATE1_OK")) {
+			return {
+				scenario: "basic_call",
+				model,
+				provider,
+				passed: false,
+				durationMs: Date.now() - start,
+				error: `Expected GATE1_OK, got: ${text.slice(0, 100)}`,
+			};
+		}
+		return {
+			scenario: "basic_call",
+			model,
+			provider,
+			passed: true,
+			durationMs: Date.now() - start,
+			receipt: {
+				transferId: receipt.transferId,
+				settled: receipt.settled,
+				cost: receipt.cost,
+				auditDegraded: receipt.auditDegraded ?? false,
+			},
+		};
 	} catch (err) {
 		return {
-			scenario: "basic_call", model, provider, passed: false,
-			durationMs: Date.now() - start, error: String(err),
+			scenario: "basic_call",
+			model,
+			provider,
+			passed: false,
+			durationMs: Date.now() - start,
+			error: String(err),
 		};
 	}
 }
@@ -142,24 +155,31 @@ async function testPolicyDenial(
 	try {
 		if (provider === "anthropic") {
 			await (client as any).messages.create({
-				model, max_tokens: 64,
+				model,
+				max_tokens: 64,
 				messages: [{ role: "user", content: "Process payment for card 4532015112830366" }],
 			});
 		} else {
 			await (client as any).chat.completions.create({
-				model, max_tokens: 64,
+				model,
+				max_tokens: 64,
 				messages: [{ role: "user", content: "Process payment for card 4532015112830366" }],
 			});
 		}
 		return {
-			scenario: "policy_denial_pii", model, provider, passed: false,
+			scenario: "policy_denial_pii",
+			model,
+			provider,
+			passed: false,
 			durationMs: Date.now() - start,
 			error: "PII-containing request was not blocked",
 		};
 	} catch (err: any) {
 		const isPolicyDenied = err?.message?.includes("PII") || err?.name === "PolicyDeniedError";
 		return {
-			scenario: "policy_denial_pii", model, provider,
+			scenario: "policy_denial_pii",
+			model,
+			provider,
 			passed: isPolicyDenied,
 			durationMs: Date.now() - start,
 			error: isPolicyDenied ? undefined : `Wrong error type: ${String(err)}`,
@@ -177,13 +197,15 @@ async function testReceiptCompleteness(
 		let receipt: any;
 		if (provider === "anthropic") {
 			const result = await (client as any).messages.create({
-				model, max_tokens: 64,
+				model,
+				max_tokens: 64,
 				messages: [{ role: "user", content: "Say hello" }],
 			});
 			receipt = result.receipt;
 		} else {
 			const result = await (client as any).chat.completions.create({
-				model, max_tokens: 64,
+				model,
+				max_tokens: 64,
 				messages: [{ role: "user", content: "Say hello" }],
 			});
 			receipt = result.receipt;
@@ -191,7 +213,9 @@ async function testReceiptCompleteness(
 		const required = ["transferId", "settled", "cost", "model", "provider", "timestamp"];
 		const missing = required.filter((f) => receipt[f] === undefined);
 		return {
-			scenario: "receipt_completeness", model, provider,
+			scenario: "receipt_completeness",
+			model,
+			provider,
 			passed: missing.length === 0,
 			durationMs: Date.now() - start,
 			error: missing.length > 0 ? `Missing receipt fields: ${missing.join(", ")}` : undefined,
@@ -204,8 +228,12 @@ async function testReceiptCompleteness(
 		};
 	} catch (err) {
 		return {
-			scenario: "receipt_completeness", model, provider, passed: false,
-			durationMs: Date.now() - start, error: String(err),
+			scenario: "receipt_completeness",
+			model,
+			provider,
+			passed: false,
+			durationMs: Date.now() - start,
+			error: String(err),
 		};
 	}
 }
@@ -220,21 +248,24 @@ async function testDestroyCleanup(provider: string): Promise<TestResult> {
 		mkdirSync(vaultDir, { recursive: true });
 		writeFileSync(
 			join(vaultDir, "usertrust.config.json"),
-			JSON.stringify({ budget: 10_000, pii: "block", board: { enabled: false } }) + "\n",
+			`${JSON.stringify({ budget: 10_000, pii: "block", board: { enabled: false } })}\n`,
 		);
 
-		const client = provider === "anthropic"
-			? await trust(new Anthropic(), { dryRun: true, budget: 10_000, vaultBase: tmpVault })
-			: await trust(new OpenAI(), { dryRun: true, budget: 10_000, vaultBase: tmpVault });
+		const client =
+			provider === "anthropic"
+				? await trust(new Anthropic(), { dryRun: true, budget: 10_000, vaultBase: tmpVault })
+				: await trust(new OpenAI(), { dryRun: true, budget: 10_000, vaultBase: tmpVault });
 
 		if (provider === "anthropic") {
 			await (client as any).messages.create({
-				model, max_tokens: 32,
+				model,
+				max_tokens: 32,
 				messages: [{ role: "user", content: "Hi" }],
 			});
 		} else {
 			await (client as any).chat.completions.create({
-				model, max_tokens: 32,
+				model,
+				max_tokens: 32,
 				messages: [{ role: "user", content: "Hi" }],
 			});
 		}
@@ -242,13 +273,20 @@ async function testDestroyCleanup(provider: string): Promise<TestResult> {
 		await client.destroy();
 
 		return {
-			scenario: "destroy_cleanup", model, provider, passed: true,
+			scenario: "destroy_cleanup",
+			model,
+			provider,
+			passed: true,
 			durationMs: Date.now() - start,
 		};
 	} catch (err) {
 		return {
-			scenario: "destroy_cleanup", model, provider, passed: false,
-			durationMs: Date.now() - start, error: String(err),
+			scenario: "destroy_cleanup",
+			model,
+			provider,
+			passed: false,
+			durationMs: Date.now() - start,
+			error: String(err),
 		};
 	}
 }
@@ -280,7 +318,7 @@ async function main() {
 	const startTime = Date.now();
 	const hostname = getHostname();
 
-	console.log(`\n=== Gate 1 Test Harness (usertrust) ===`);
+	console.log("\n=== Gate 1 Test Harness (usertrust) ===");
 	console.log(`Host: ${hostname}`);
 	console.log(`Time: ${new Date().toISOString()}`);
 	console.log(`Vault: ${VAULT_BASE}\n`);
@@ -292,10 +330,11 @@ async function main() {
 	mkdirSync(vaultDir, { recursive: true });
 	writeFileSync(
 		join(vaultDir, "usertrust.config.json"),
-		JSON.stringify(
+		`${JSON.stringify(
 			{ budget: 100_000, pii: "block", board: { enabled: false }, audit: { rotation: "none" } },
-			null, "\t",
-		) + "\n",
+			null,
+			"\t",
+		)}\n`,
 	);
 
 	const results: TestResult[] = [];
@@ -305,7 +344,9 @@ async function main() {
 	if (process.env.ANTHROPIC_API_KEY) {
 		console.log("--- Anthropic Provider ---");
 		const anthropicClient = await trust(new Anthropic(), {
-			dryRun: true, budget: 100_000, vaultBase: VAULT_BASE,
+			dryRun: true,
+			budget: 100_000,
+			vaultBase: VAULT_BASE,
 		});
 
 		for (const model of MODELS.anthropic) {
@@ -317,7 +358,9 @@ async function main() {
 
 			const receipt = await testReceiptCompleteness(anthropicClient, model.name, "anthropic");
 			results.push(receipt);
-			console.log(`    receipt_completeness: ${receipt.passed ? "PASS" : "FAIL"} (${receipt.durationMs}ms)`);
+			console.log(
+				`    receipt_completeness: ${receipt.passed ? "PASS" : "FAIL"} (${receipt.durationMs}ms)`,
+			);
 			if (receipt.error) console.log(`      ${receipt.error}`);
 		}
 
@@ -332,7 +375,9 @@ async function main() {
 		console.log("  Testing destroy cleanup...");
 		const destroy = await testDestroyCleanup("anthropic");
 		results.push(destroy);
-		console.log(`    destroy_cleanup: ${destroy.passed ? "PASS" : "FAIL"} (${destroy.durationMs}ms)`);
+		console.log(
+			`    destroy_cleanup: ${destroy.passed ? "PASS" : "FAIL"} (${destroy.durationMs}ms)`,
+		);
 		if (destroy.error) console.log(`      ${destroy.error}`);
 	} else {
 		console.log("SKIP: ANTHROPIC_API_KEY not set");
@@ -343,7 +388,9 @@ async function main() {
 	if (process.env.OPENAI_API_KEY) {
 		console.log("\n--- OpenAI Provider ---");
 		const openaiClient = await trust(new OpenAI(), {
-			dryRun: true, budget: 100_000, vaultBase: VAULT_BASE,
+			dryRun: true,
+			budget: 100_000,
+			vaultBase: VAULT_BASE,
 		});
 
 		for (const model of MODELS.openai) {
@@ -355,7 +402,9 @@ async function main() {
 
 			const receipt = await testReceiptCompleteness(openaiClient, model.name, "openai");
 			results.push(receipt);
-			console.log(`    receipt_completeness: ${receipt.passed ? "PASS" : "FAIL"} (${receipt.durationMs}ms)`);
+			console.log(
+				`    receipt_completeness: ${receipt.passed ? "PASS" : "FAIL"} (${receipt.durationMs}ms)`,
+			);
 			if (receipt.error) console.log(`      ${receipt.error}`);
 		}
 
@@ -370,7 +419,9 @@ async function main() {
 		console.log("  Testing destroy cleanup...");
 		const destroy = await testDestroyCleanup("openai");
 		results.push(destroy);
-		console.log(`    destroy_cleanup: ${destroy.passed ? "PASS" : "FAIL"} (${destroy.durationMs}ms)`);
+		console.log(
+			`    destroy_cleanup: ${destroy.passed ? "PASS" : "FAIL"} (${destroy.durationMs}ms)`,
+		);
 		if (destroy.error) console.log(`      ${destroy.error}`);
 	} else {
 		console.log("SKIP: OPENAI_API_KEY not set");
@@ -407,9 +458,9 @@ async function main() {
 		REPORT_DIR,
 		`${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}.json`,
 	);
-	writeFileSync(reportFile, JSON.stringify(report, null, "\t") + "\n");
+	writeFileSync(reportFile, `${JSON.stringify(report, null, "\t")}\n`);
 
-	console.log(`\n=== Gate 1 Results ===`);
+	console.log("\n=== Gate 1 Results ===");
 	console.log(`Total: ${results.length} | Passed: ${totalPassed} | Failed: ${totalFailed}`);
 	console.log(`Audit chain: ${auditChainValid ? "VALID" : "BROKEN"}`);
 	console.log(`Overall: ${report.passed ? "PASS" : "FAIL"}`);
