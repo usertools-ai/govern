@@ -50,7 +50,7 @@ function ArchAnnotation({
 			<ul className="flex flex-col gap-3">
 				{bullets.map((b) => (
 					<li key={b} className="flex items-start gap-3 text-sm text-white/60">
-						<span className="mt-0.5 w-1.5 h-1.5 rounded-full bg-ut shrink-0" />
+						<span className="mt-[7px] w-1.5 h-1.5 rounded-full bg-ut shrink-0" />
 						{b}
 					</li>
 				))}

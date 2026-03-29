@@ -33,16 +33,16 @@ export function CodeExample() {
 						<ScrollReveal delay={0.3}>
 							<ul className="flex flex-col gap-3 mt-2">
 								<li className="flex items-start gap-3 text-sm text-white/60">
-									<span className="mt-0.5 w-1.5 h-1.5 rounded-full bg-ut shrink-0" />
+									<span className="mt-[7px] w-1.5 h-1.5 rounded-full bg-ut shrink-0" />
 									One <code className="font-mono text-ut text-xs">await trust(client)</code> call —
 									nothing else changes
 								</li>
 								<li className="flex items-start gap-3 text-sm text-white/60">
-									<span className="mt-0.5 w-1.5 h-1.5 rounded-full bg-ut shrink-0" />
+									<span className="mt-[7px] w-1.5 h-1.5 rounded-full bg-ut shrink-0" />
 									Returns the same interface as the original SDK
 								</li>
 								<li className="flex items-start gap-3 text-sm text-white/60">
-									<span className="mt-0.5 w-1.5 h-1.5 rounded-full bg-ut shrink-0" />
+									<span className="mt-[7px] w-1.5 h-1.5 rounded-full bg-ut shrink-0" />
 									Every response includes a{" "}
 									<code className="font-mono text-ut text-xs">receipt</code> with hash-chained proof
 								</li>
